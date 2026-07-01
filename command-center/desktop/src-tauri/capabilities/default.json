@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimal capability set for the main window: Tauri core defaults plus local OS notifications. No shell, filesystem, HTTP, dialog, or clipboard access is granted — the webview reaches the backend only via ordinary fetch/SSE, constrained by the CSP connect-src allow-list.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:default"
+  ]
+}

@@ -1,0 +1,45 @@
+# Reproducible Linux build environment for the Tauri desktop app.
+#
+# Ubuntu 24.04 (noble) is required: Tauri v2 needs webkit2gtk-4.1, which is not
+# available on Debian bookworm. This image carries ONLY the system libraries +
+# Node; the Rust toolchain and warmed crate cache are mounted in from the host
+# at run time (see desktop/README.md), so the image stays small and the build
+# reuses the host's `cargo fetch`.
+#
+#   docker build -f desktop/Dockerfile.build -t cc-tauri-builder desktop
+#
+# Then (from the repo root) the bundle is produced with the host frontend build
+# (web/dist-tauri) and the host Rust toolchain:
+#
+#   docker run --rm --user "$(id -u):$(id -g)" \
+#     -e HOME=/tmp \
+#     -e RUSTUP_HOME=/home/operator/.rustup -e CARGO_HOME=/home/operator/.cargo \
+#     -e PATH=/home/operator/.cargo/bin:/usr/local/bin:/usr/bin:/bin \
+#     -v "$PWD":/work \
+#     -v /home/operator/.cargo:/home/operator/.cargo \
+#     -v /home/operator/.rustup:/home/operator/.rustup \
+#     -w /work/desktop cc-tauri-builder \
+#     npx tauri build --bundles deb,appimage -c '{"build":{"beforeBuildCommand":""}}'
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    wget \
+    file \
+    ca-certificates \
+    pkg-config \
+    libwebkit2gtk-4.1-dev \
+    libgtk-3-dev \
+    libsoup-3.0-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev \
+    patchelf \
+    nodejs \
+    npm \
+    xvfb \
+    dbus-x11 \
+  && rm -rf /var/lib/apt/lists/*

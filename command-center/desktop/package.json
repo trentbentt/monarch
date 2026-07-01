@@ -1,0 +1,16 @@
+{
+  "name": "command-center-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Native Tauri desktop client for the Monarch Command Center (macOS + Linux).",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "bash scripts/build-desktop.sh",
+    "icons": "tauri icon ../web/public/icon-512.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}
