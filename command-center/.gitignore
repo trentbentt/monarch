@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Vite
+web/node_modules/
+web/dist/
+web/dist-tauri/
+web/.vite/
+*.local
+
+# Tauri desktop app
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/smoke.log
+desktop/.env
+
+# Secrets / runtime
+.env
+*.audit.log
+server/runtime/
+
+# OS
+.DS_Store

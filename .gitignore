@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node / web build
+node_modules/
+dist/
+build/
+
+# Rust / Tauri build output
+target/
+
+# Virtualenvs
+venv/
+.venv/
+
+# Models / large artifacts (never tracked — the origin repos gitignore these too)
+*.onnx
+*.onnx.data
+*.gguf
+*.bin
+*.safetensors
+*-bak
+*.broken*
+
+# Secrets + runtime (credential safety-net; nothing matching is tracked)
+.env
+*.env
+*.key
+*.pem
+*secret*
+*.log
+logs/
+*.db
+*.sqlite
+
+# Scratch
+_artifacts/
+.patch-backups/

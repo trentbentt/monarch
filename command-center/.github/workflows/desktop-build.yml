@@ -1,0 +1,88 @@
+name: desktop-build
+
+# Builds the native Tauri desktop app for macOS (universal: Apple Silicon +
+# Intel) and Linux. macOS bundles (.app/.dmg) can only be produced and codesigned
+# on a macOS host, so the Mac artifact is built here on a GitHub-hosted macOS
+# runner — it cannot be built on the monarch Linux box.
+#
+# Trigger manually (Actions tab → Run workflow) or by pushing a `desktop-v*` tag.
+# Artifacts are uploaded per-run; signing/notarization is intentionally NOT wired
+# (personal/tailnet tool) — add APPLE_* secrets + tauri-action signing inputs to
+# enable it.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: "--target universal-apple-darwin"
+          - platform: ubuntu-22.04
+            rust-targets: ""
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            patchelf \
+            file
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci || npm --prefix web install
+
+      - name: Install desktop (Tauri CLI) dependencies
+        run: npm --prefix desktop ci || npm --prefix desktop install
+
+      # The backend endpoint is never committed — supply it via a repo secret
+      # (Settings → Secrets → Actions → CC_DESKTOP_API_BASE). The build script
+      # injects it into the frontend (VITE_API_BASE) and the CSP connect-src.
+      - name: Build the desktop app
+        working-directory: desktop
+        env:
+          CC_DESKTOP_API_BASE: ${{ secrets.CC_DESKTOP_API_BASE }}
+        run: bash scripts/build-desktop.sh ${{ matrix.args }}
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: monarch-command-center-${{ matrix.platform }}
+          path: |
+            desktop/src-tauri/target/**/release/bundle/**/*.dmg
+            desktop/src-tauri/target/**/release/bundle/**/*.app
+            desktop/src-tauri/target/**/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/**/release/bundle/**/*.deb
+          if-no-files-found: ignore
