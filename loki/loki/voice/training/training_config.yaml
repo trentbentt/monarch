@@ -1,0 +1,64 @@
+# Phase 18 "hey loki" wake-model training config.
+# Consumed by openWakeWord's GitHub train.py (cloned to ./openWakeWord-src).
+# Schema mirrors openWakeWord-src/examples/custom_model.yml; paths are relative
+# to loki/voice/training/ (run_training.sh cd's here).
+
+model_name: "hey_loki"
+target_phrase:
+  - "hey loki"
+
+# Confusable phrases the model must NOT fire on (beyond auto phoneme-overlap negatives).
+custom_negative_phrases:
+  - "hey"
+  - "loki"
+  - "okay comrade"        # Phase 17.5 wake word — must stay distinct (§14.2)
+  - "hey low key"
+  - "hey loaded"
+  - "you may begin"       # Phase 17.5 end word
+  # NOTE: a 2026-06-27 experiment to suppress the "hey low key" near-homophone
+  # (expanded "low key" cluster + custom_negative_duplication + adversarial_negative
+  # batch 50→150) cratered recall 0.918→0.048 — the homophone can't be suppressed
+  # without rejecting the target on synthetic data. Reverted. Real-mic positives
+  # are the path if this matters. See memory loki-voice-training-setup.
+
+# Positive synthetic sample counts. 20k is the recommended floor; raise for a
+# production model once the pipeline is proven.
+n_samples: 100000
+n_samples_val: 2000
+tts_batch_size: 50
+augmentation_batch_size: 16
+
+# dscripka's piper-sample-generator fork — the one train.py imports
+# `from generate_samples import generate_samples`. (Distinct from the rhasspy
+# generator Task 7's gen_samples.py drives.)
+piper_sample_generator_path: "./piper-sample-generator-dscripka"
+
+output_dir: "./runs"
+
+rir_paths:
+  - "./datasets/mit_rirs"
+background_paths:
+  - "./datasets/background_clips"
+background_paths_duplication_rate:
+  - 1
+
+false_positive_validation_data_path: "./datasets/validation_set_features.npy"
+
+augmentation_rounds: 1
+
+# Pre-computed negative features (the negative training class — no raw AudioSet
+# needed for negatives, the features are precomputed).
+feature_data_files:
+  "ACAV100M_sample": "./datasets/openwakeword_features_ACAV100M_2000_hrs_16bit.npy"
+
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "adversarial_negative": 50
+  "positive": 50
+
+model_type: "dnn"
+layer_size: 32
+
+steps: 50000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2

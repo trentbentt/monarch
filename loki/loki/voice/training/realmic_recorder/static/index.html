@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>hey loki — real-mic eval recorder</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font:16px/1.5 system-ui,sans-serif; background:#111; color:#eee;
+           display:flex; min-height:100vh; align-items:center; justify-content:center; }
+    main { width:min(560px,92vw); padding:24px; }
+    h1 { font-size:1.05rem; font-weight:600; color:#9ad; margin:0 0 4px; }
+    #prompt { font-size:1.9rem; font-weight:700; margin:18px 0; min-height:2.4em; }
+    #sub { color:#9a9; min-height:1.2em; }
+    button { font:inherit; padding:14px 20px; border-radius:12px; border:0; cursor:pointer; margin:6px 4px; }
+    #rec { background:#c33; color:#fff; } #rec.recording { background:#fa3; color:#111; }
+    #keep { background:#3a6; color:#fff; } #redo { background:#444; color:#eee; }
+    #done { background:#258; color:#fff; }
+    .row { margin-top:14px; } audio { width:100%; margin-top:12px; }
+    table { width:100%; margin-top:22px; border-collapse:collapse; font-size:.9rem; color:#bbb; }
+    td { padding:3px 0; } td:last-child { text-align:right; }
+    #err { color:#f88; margin-top:14px; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>hey loki — real-mic eval recorder</h1>
+    <div id="prompt">Loading…</div>
+    <div id="sub"></div>
+    <div class="row">
+      <button id="rec">● Record</button>
+      <button id="keep" hidden>✓ Keep &amp; next</button>
+      <button id="redo" hidden>↺ Re-record</button>
+    </div>
+    <audio id="play" controls hidden></audio>
+    <table id="counts"></table>
+    <div id="err"></div>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
