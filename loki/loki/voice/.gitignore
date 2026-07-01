@@ -1,0 +1,14 @@
+training/data/
+training/runs/
+training/datasets/
+training/piper-sample-generator/
+training/piper-sample-generator-dscripka/
+training/openWakeWord-src/
+models/*.onnx
+models/*.onnx.json
+models/*.onnx.data
+# hey_loki.onnx was force-tracked here (!models/hey_loki.onnx); removed because the
+# ONNX embeds local build paths in stack_trace metadata — keep off the public skeleton (§0.4).
+# Local model backups / failed-experiment artifacts — never tracked (git history is the backup)
+models/*-bak
+models/*.broken*
