@@ -1,0 +1,123 @@
+#!/bin/sh
+""":"
+exec "$HOME/venv/inference/bin/python3" "$0" "$@"
+":"
+
+loki-supervisor — operator CLI for the conversational supervisor layer.
+
+The supervisor reads live state + ledger + doctrine (read-only) and talks to you
+about the system. It can submit a proposal into the daemon's authority gate, but
+it holds no authority of its own — every proposal is operator-gated exactly like a
+deterministic rule's.
+
+Usage:
+  loki-supervisor ask "why did T1 offload last night?"
+  loki-supervisor ask --memory "explain our memory layers"   # inline memory doctrine
+  loki-supervisor ask --deep "trace how a vault edit reaches L3 search"  # agentic loop
+  loki-supervisor context                                    # dump the grounded context block
+  loki-supervisor actions                                    # list proposable actions
+  loki-supervisor propose <action_id> "rationale" [--param tier=t5]
+  loki-supervisor queue                                      # show pending proposals (peek)
+
+Intake of supervisor proposals by the daemon is DEFAULT OFF; enable it by starting
+the daemon with LOKI_SUPERVISOR_PROPOSALS=1. `propose` enqueues regardless, but
+the engine only drains the queue when intake is enabled.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+# Run under the monarch venv; resolve the package whether installed or in-tree.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from loki.supervisor.client import SupervisorClient
+from loki.supervisor.context import build_context, registered_actions
+from loki.supervisor.proposals import SupervisorProposalQueue
+
+
+def _parse_params(items) -> dict:
+    out = {}
+    for kv in items or []:
+        if "=" not in kv:
+            sys.exit(f"--param expects key=value, got {kv!r}")
+        k, v = kv.split("=", 1)
+        out[k] = v
+    return out
+
+
+def cmd_ask(args) -> None:
+    if getattr(args, "deep", False):
+        # Phase B: model-driven multi-step retrieval loop (read-only, bounded).
+        from loki.supervisor.agent import SupervisorAgent
+        print(SupervisorAgent().investigate(args.question))
+        return
+    include = ["memory"] if args.memory else None
+    client = SupervisorClient()
+    print(client.ask(args.question, include_doctrine=include))
+
+
+def cmd_context(args) -> None:
+    print(build_context(include_doctrine=(["memory"] if args.memory else None)))
+
+
+def cmd_actions(_args) -> None:
+    for a in registered_actions():
+        veto = f", veto={a['nonblocking_veto_sec']}s" if a["nonblocking_veto_sec"] else ""
+        print(f"{a['action_id']}  (default Tier {a['default_tier']}, "
+              f"reversible={a['reversible']}, vram_mb={a['vram_mb']}{veto})")
+        if a["description"]:
+            print(f"    {a['description']}")
+
+
+def cmd_propose(args) -> None:
+    q = SupervisorProposalQueue()
+    try:
+        p = q.submit(args.action_id, args.rationale, _parse_params(args.param))
+    except ValueError as exc:
+        sys.exit(f"refused: {exc}")
+    print(f"enqueued proposal {p.action_id} (dedup_key={p.dedup_key})")
+    print("  → the engine will route it through the authority gate when intake is "
+          "enabled (LOKI_SUPERVISOR_PROPOSALS=1).")
+
+
+def cmd_queue(_args) -> None:
+    pending = SupervisorProposalQueue().pending()
+    print(json.dumps(pending, indent=2) if pending else "(queue empty)")
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(prog="loki-supervisor")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    a = sub.add_parser("ask", help="ask the supervisor a question about the system")
+    a.add_argument("question")
+    a.add_argument("--memory", action="store_true",
+                   help="inline the memory-architecture doctrine excerpt")
+    a.add_argument("--deep", action="store_true",
+                   help="Phase B: model-driven multi-step retrieval (read-only agentic loop)")
+    a.set_defaults(func=cmd_ask)
+
+    c = sub.add_parser("context", help="dump the grounded context block (no model call)")
+    c.add_argument("--memory", action="store_true")
+    c.set_defaults(func=cmd_context)
+
+    sub.add_parser("actions", help="list proposable actions").set_defaults(func=cmd_actions)
+
+    pr = sub.add_parser("propose", help="enqueue a proposal for a registered action")
+    pr.add_argument("action_id")
+    pr.add_argument("rationale")
+    pr.add_argument("--param", action="append", help="key=value action param")
+    pr.set_defaults(func=cmd_propose)
+
+    sub.add_parser("queue", help="peek pending supervisor proposals").set_defaults(func=cmd_queue)
+
+    args = p.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

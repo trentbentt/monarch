@@ -1,0 +1,846 @@
+#!/bin/sh
+""":"
+exec "$HOME/venv/inference/bin/python3" "$0" "$@"
+":"
+
+loki-q — Loki state query CLI v0.1
+
+Reads ~/.local/state/loki/state.json (written by daemon every 30s).
+Works without the daemon running — reads last-known state from disk.
+
+Usage:
+    loki-q vram            VRAM usage by tier + OOM risk
+    loki-q health          Service health across all components
+    loki-q tiers           Tier state, model, context, performance
+    loki-q workloads       Active and recent completed workloads
+    loki-q quotas          Cloud API budget status
+    loki-q memory          7-layer memory architecture state (L1-L7)
+    loki-q events [N]      Last N events (default 20)
+    loki-q decisions       Decision engine state (P3.1)
+    loki-q authority ...   Authority / trust-counter state
+    loki-q schedule        Cron listener schedule state
+    loki-q skill-drafts    Pending Hermes-drafted skill candidates
+    loki-q curated-gc      Pending curated-tier GC prune/merge proposals (§8.8)
+    loki-q profile-drift   EverCore profile-drift digest
+    loki-q evercore        L7 EverCore substrate health + activity
+    loki-q doctrine-lint   Last nightly doctrine <-> disk lint result
+    loki-q all             Full summary
+    loki-q json            Raw JSON state dump
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+# Allow running as a script from any directory
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from loki.schema import (ActionLifecycleState, ActionTier, HealthStatus,
+                           MemoryLayerHealth, OOMRisk, TierState)
+from loki.state import StateStore
+
+# ─── Colour helpers ────────────────────────────────────────────────────────────
+
+def _c(text: str, code: str) -> str:
+    return f"\033[{code}m{text}\033[0m"
+
+def red(t: str) -> str:    return _c(t, "31")
+def green(t: str) -> str:  return _c(t, "32")
+def yellow(t: str) -> str: return _c(t, "33")
+def blue(t: str) -> str:   return _c(t, "36")
+def bold(t: str) -> str:   return _c(t, "1")
+def dim(t: str) -> str:    return _c(t, "2")
+
+
+def _ago(dt: Optional[datetime]) -> str:
+    if dt is None:
+        return dim("never")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    secs = int((datetime.now(timezone.utc) - dt).total_seconds())
+    if secs < 60:
+        return f"{secs}s ago"
+    elif secs < 3600:
+        return f"{secs // 60}m ago"
+    elif secs < 86400:
+        return f"{secs // 3600}h {(secs % 3600) // 60}m ago"
+    else:
+        return f"{secs // 86400}d ago"
+
+
+def _dur(secs: Optional[int]) -> str:
+    if secs is None:
+        return dim("—")
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        return f"{secs // 60}m"
+    if secs < 86400:
+        return f"{secs // 3600}h {(secs % 3600) // 60}m"
+    return f"{secs // 86400}d {(secs % 86400) // 3600}h"
+
+
+def _local_hm(dt: Optional[datetime]) -> str:
+    """Format a UTC datetime as system-local HH:MM (cron runs in local tz)."""
+    if dt is None:
+        return dim("—")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone().strftime("%H:%M")
+
+
+def _bar(used: int, total: int, width: int = 20) -> str:
+    pct = used / total if total else 0
+    filled = int(pct * width)
+    bar = "█" * filled + "░" * (width - filled)
+    color = red if pct > 0.90 else yellow if pct > 0.75 else green
+    return f"[{color(bar)}] {pct*100:.1f}%"
+
+
+# ─── Subcommands ──────────────────────────────────────────────────────────────
+
+def cmd_vram(model) -> None:
+    v = model.resources.vram
+    target_pct = getattr(v, 'baseline_target_pct', 80.0)
+    target_mb = int(v.total_mb * target_pct / 100)
+    target_headroom_mb = target_mb - v.used_mb   # negative if over target
+    actual_pct = (v.used_mb / v.total_mb) * 100 if v.total_mb else 0
+    over_target = v.used_mb > target_mb
+
+    print(bold("── VRAM ─────────────────────────────────────────────────"))
+    print(f"  Total    : {v.total_mb:,} MiB")
+    print(f"  Used     : {v.used_mb:,} MiB  {_bar(v.used_mb, v.total_mb)}")
+    print(f"  Free     : {v.free_mb:,} MiB")
+
+    # Target line — visible every query
+    target_color = red if over_target else green
+    target_marker = "OVER" if over_target else "OK  "
+    print(f"  Target   : {target_mb:,} MiB ({target_pct:.0f}%)  "
+          f"{target_color(target_marker)}  "
+          f"headroom: {target_color(f'{target_headroom_mb:+,} MiB')}")
+
+    risk_str = {
+        OOMRisk.LOW: green("LOW"),
+        OOMRisk.ELEVATED: yellow("ELEVATED ⚠"),
+        OOMRisk.IMMINENT: red("IMMINENT 🔴"),
+    }.get(v.oom_risk, str(v.oom_risk))
+    print(f"  OOM risk : {risk_str}")
+
+    if over_target:
+        excess = v.used_mb - target_mb
+        print(f"  {yellow('⚠')} Baseline {excess:,} MiB ({actual_pct - target_pct:+.1f}pp) over {target_pct:.0f}% target")
+
+    print()
+    print("  By tier:")
+    tier_vram = {
+        "t1": v.used_by_tier.t1,
+        "t2": v.used_by_tier.t2,
+        "t3": v.used_by_tier.t3,
+        "t4": v.used_by_tier.t4,
+        "t5": v.used_by_tier.t5,
+        "t6": v.used_by_tier.t6,
+        "driver": v.used_by_tier.driver_display,
+        "other": v.used_by_tier.other,
+    }
+    for name, mb in tier_vram.items():
+        if mb > 0:
+            bar = _bar(mb, v.total_mb, width=12)
+            print(f"    {name:<8}: {mb:>6,} MiB  {bar}")
+
+    updated = _ago(v.updated_at)
+    print(f"\n  Updated  : {updated}")
+
+
+def cmd_health(model) -> None:
+    print(bold("── Health ───────────────────────────────────────────────"))
+    for comp in model.health.components:
+        status_str = {
+            HealthStatus.OK:           green("OK          "),
+            HealthStatus.UNRESPONSIVE: red("UNRESPONSIVE"),
+            HealthStatus.DEGRADED:     yellow("DEGRADED    "),
+            HealthStatus.STOPPED:      dim("STOPPED     "),
+            HealthStatus.IDLE:         dim("IDLE        "),
+            HealthStatus.ERROR:        red("ERROR       "),
+            HealthStatus.UNKNOWN:      dim("UNKNOWN     "),
+        }.get(comp.status, str(comp.status))
+
+        ms_str = f"{comp.response_ms}ms" if comp.response_ms else "—"
+        port_str = f":{comp.port}" if comp.port else ""
+        last_ok = _ago(comp.last_seen_healthy) if comp.status not in (HealthStatus.OK, HealthStatus.IDLE) else ""
+        detail = f"  {dim(comp.detail)}" if comp.detail else ""
+
+        print(f"  {comp.name:<24} {status_str}  {ms_str:<6}  {port_str:<6}{last_ok}{detail}")
+
+    sweep = _ago(model.health.last_full_sweep)
+    print(f"\n  Last sweep: {sweep}")
+
+
+def cmd_tiers(model) -> None:
+    print(bold("── Tiers ────────────────────────────────────────────────"))
+    for tier_id in ("t1", "t2", "t3", "t4", "t5", "t6"):
+        tier = model.tiers.get(tier_id)
+        if tier is None:
+            continue
+
+        state_str = {
+            TierState.ACTIVE:       green("ACTIVE      "),
+            TierState.STOPPED:      dim("STOPPED     "),
+            TierState.FAILED:       red("FAILED      "),
+            TierState.OFFLINE:      dim("OFFLINE     "),
+            TierState.STARTING:     yellow("STARTING    "),
+            TierState.STOPPING:     yellow("STOPPING    "),
+            TierState.SOFT_OFFLOAD: yellow("SOFT_OFFLOAD"),
+        }.get(tier.runtime.state, str(tier.runtime.state))
+
+        cfg = tier.config
+        vram = tier.resources.vram_used_mb
+        tok = tier.performance.tok_per_sec_recent
+        tok_str = f"{tok:.0f} tok/s" if tok else "—"
+        lora = f"  lora:{cfg.active_lora}" if cfg.active_lora else ""
+        offload = f"  offload:{cfg.expert_offload_pct}%" if cfg.expert_offload_pct else ""
+        cpu_tag = "  [CPU]" if cfg.cpu_only else ""
+
+        print(f"  {tier_id.upper()}  {state_str}  "
+              f"{cfg.model:<18} {cfg.quant:<12}  "
+              f"ctx:{cfg.context_size//1024}K  "
+              f"port:{cfg.port}  "
+              f"vram:{vram:>5,}MiB  "
+              f"{tok_str}"
+              f"{lora}{offload}{cpu_tag}")
+
+        # Process-observation sub-line (process.py). Shown only when there's a
+        # live PID or a restart history — keeps STOPPED/OFFLINE tiers clean.
+        rt = tier.runtime
+        restarts = getattr(rt, "restart_count_24h", 0)
+        if rt.pid is not None or restarts > 0:
+            rst_str = str(restarts)
+            if restarts >= 5:
+                rst_str = red(rst_str)
+            elif restarts >= 3:
+                rst_str = yellow(rst_str)
+            pid_str = rt.pid if rt.pid is not None else "—"
+            print(f"        {dim('proc')} pid:{pid_str}  "
+                  f"rss:{getattr(rt, 'rss_mb', 0):,}MiB  "
+                  f"cpu:{getattr(rt, 'cpu_pct', 0.0):.0f}%  "
+                  f"up:{_dur(rt.uptime_sec)}  "
+                  f"restarts/24h:{rst_str}")
+
+
+def cmd_workloads(model) -> None:
+    print(bold("── Workloads ────────────────────────────────────────────"))
+    active = model.workloads.active
+    if active:
+        print(f"  {bold('Active')} ({len(active)}):")
+        for w in active:
+            eta = f"  ETA:{_ago(w.expected_completion)}" if w.expected_completion else ""
+            pct = f"  {w.progress_pct}%" if w.progress_pct is not None else ""
+            print(f"    [{w.priority.upper():<6}] {w.workload_id}  "
+                  f"({w.type.value})  started {_ago(w.started_at)}{eta}{pct}")
+            if w.progress_detail:
+                print(f"             {dim(w.progress_detail)}")
+    else:
+        print(f"  {dim('No active workloads')}")
+
+    recent = model.workloads.completed[-10:]
+    if recent:
+        print(f"\n  {bold('Recent completed')} (last {len(recent)}):")
+        for w in reversed(recent):
+            outcome_str = {
+                "success": green("✓"),
+                "failed": red("✗"),
+                "timeout": yellow("⏱"),
+                "killed": red("☠"),
+                "partial": yellow("~"),
+            }.get(w.outcome.value, "?")
+            sla = green(" SLA✓") if w.sla_met else (red(" SLA✗") if w.sla_met is False else "")
+            print(f"    {outcome_str} {w.workload_id:<45} {w.duration_sec}s{sla}  {_ago(w.completed_at)}")
+
+
+def cmd_quotas(model) -> None:
+    print(bold("── Quotas ───────────────────────────────────────────────"))
+    if not model.quotas.quotas:
+        print(f"  {dim('No quota data yet — quota_listener not running')}")
+        return
+    for name, q in model.quotas.quotas.items():
+        status_str = {
+            "ok": green("OK"),
+            "approaching_wall": yellow("APPROACHING"),
+            "walled": red("WALLED"),
+        }.get(q.status.value, q.status.value)
+
+        if q.used_pct is not None:
+            usage = f"{q.used_pct:.0f}% used  {_bar(int(q.used_pct), 100, width=12)}"
+        elif q.used_usd is not None and q.budget_usd:
+            pct = q.used_usd / q.budget_usd * 100
+            usage = f"${q.used_usd:.2f} / ${q.budget_usd:.2f}  {_bar(int(pct), 100, width=12)}"
+        else:
+            usage = dim("no data")
+
+        wall = f"  wall:{_ago(q.projected_wall_at)}" if q.projected_wall_at else ""
+        walls = getattr(q, "walls_in_window", 0)
+        walls_str = (red(str(walls)) if walls else dim("0"))
+        last_call = _ago(getattr(q, "last_call_ts", None)) if getattr(q, "last_call_ts", None) else dim("never")
+        print(f"  {name:<20} {q.provider:<9} {q.period:<8} {status_str:<12}  "
+              f"{usage}  walls:{walls_str}  last:{last_call}{wall}")
+        tin = getattr(q, "tokens_in_today", 0)
+        tout = getattr(q, "tokens_out_today", 0)
+        if tin or tout:
+            print(f"        {dim('tokens today')} in:{tin:,}  out:{tout:,}")
+
+
+def cmd_memory(model) -> None:
+    """Per-layer memory architecture health + activity (MEMORY_ARCHITECTURE §10)."""
+    print(bold("── Memory Layers (§10) ──────────────────────────────────"))
+    mem = getattr(model, "memory", None)
+    if mem is None or not getattr(mem, "layers", None):
+        print(dim("  No memory data — memory.py not running / schema predates it."))
+        return
+
+    hcolor = {
+        MemoryLayerHealth.OK:             green("OK            "),
+        MemoryLayerHealth.DEGRADED:       yellow("DEGRADED      "),
+        MemoryLayerHealth.UNRESPONSIVE:   red("UNRESPONSIVE  "),
+        MemoryLayerHealth.NOT_CONFIGURED: dim("NOT_CONFIGURED"),
+        MemoryLayerHealth.UNKNOWN:        dim("UNKNOWN       "),
+    }
+
+    for lid in ("L1", "L2", "L3", "L4", "L5", "L6", "L7"):
+        L = mem.layers.get(lid)
+        if L is None:
+            continue
+        status = hcolor.get(L.health, str(L.health))
+        ms = f"{L.response_ms}ms" if L.response_ms else ""
+        sig = f"  {dim(L.health_signal)}" if L.health_signal else ""
+        print(f"  {lid} {L.name:<16} [{L.role:<6}] {status} {ms:<6}{sig}")
+        if L.activity_signal and L.activity_signal != L.health_signal:
+            print(f"        {dim('activity: ' + L.activity_signal)}")
+        if L.anomaly:
+            print(f"        {red('anomaly: ' + L.anomaly)}")
+
+    total = getattr(mem, "skill_drafts_total", 0)
+    stale = getattr(mem, "skill_drafts_stale", [])
+    if total or stale:
+        line = f"\n  skill-drafts: {total} pending"
+        if stale:
+            line += red(f"  ({len(stale)} stale >30d: {', '.join(stale)})")
+        print(line)
+
+    gc_total = getattr(mem, "gc_proposals_total", 0)
+    gc_stale = getattr(mem, "gc_proposals_stale", [])
+    if gc_total or gc_stale:
+        line = f"\n  curated-gc: {gc_total} proposal(s)"
+        if gc_stale:
+            line += red(f"  ({len(gc_stale)} stale >30d: {', '.join(gc_stale)})")
+        print(line)
+
+    print(f"\n  Last sweep: {_ago(getattr(mem, 'last_sweep', None))}")
+
+
+def cmd_events(model, n: int = 20) -> None:
+    print(bold(f"── Events (last {n}) ─────────────────────────────────────"))
+    events = model.events.log[-n:]
+    if not events:
+        print(f"  {dim('No events recorded yet')}")
+        return
+    for e in reversed(events):
+        sev_str = {
+            "info":     dim("INFO    "),
+            "warning":  yellow("WARN    "),
+            "critical": red("CRIT    "),
+        }.get(e.severity, e.severity[:8].ljust(8))
+
+        tier_tag = f"[{e.tier}] " if e.tier else ""
+        print(f"  {_ago(e.timestamp):<12}  {sev_str}  {tier_tag}{e.type}"
+              + (f"  {dim(e.detail)}" if e.detail else ""))
+
+
+def cmd_all(model) -> None:
+    ts = model.last_updated
+    if ts and ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    age = _ago(ts) if ts else "unknown"
+    print(bold(f"═══ Loki System Model  [updated {age}] ═══"))
+    print()
+    cmd_vram(model);    print()
+    cmd_health(model);  print()
+    cmd_tiers(model);   print()
+    cmd_workloads(model); print()
+    cmd_quotas(model);  print()
+    cmd_memory(model);  print()
+    cmd_events(model, n=10)
+
+
+# ─── Entry point ──────────────────────────────────────────────────────────────
+
+USAGE = """\
+Usage: loki-q <command> [args]
+
+Commands:
+  vram          VRAM by tier + OOM risk
+  health        Service health checks
+  tiers         Tier state and performance
+  workloads     Active and recent workloads
+  quotas        Cloud API budget status
+  schedule      Cron reconciliation — upcoming, missed, collisions, stale
+  memory        Memory-layer health + activity (L1–L7, §10)
+  decisions     Decision-engine pending operator asks (§12.6)
+  authority     N=12 trust ledger — list | promote <id> | demote <id> [reason]
+  events [N]    Last N events (default 20)
+  all           Full summary
+  json          Raw state dump
+  skill-drafts  List pending Hermes skill drafts (age, summary, stale flag)
+  curated-gc    List pending curated-tier GC proposals (§8.8 janitor; age, stale flag)
+  evercore      EverCore (L7) substrate detail — ES/Milvus/Mongo/Redis/API + rerank
+  profile-drift EverCore profile drift digest vs vault operator.md (§15 Item 13)
+  doctrine-lint Nightly doctrine ⟷ disk lint result (master summary §15.5)
+"""
+
+
+_STALE_DRAFT_DAYS = 30   # mirrors memory.py — drafts older than this are surfaced as stale
+
+
+def _draft_summary(skill_path: str) -> Optional[str]:
+    """One-line description from a draft SKILL.md: YAML `description:` first,
+    else the first real markdown line. None if unreadable."""
+    try:
+        text = Path(skill_path).read_text(errors="replace")
+    except OSError:
+        return None
+    m = re.search(r"^description:\s*(.+)$", text, re.M)
+    if m:
+        return m.group(1).strip().strip('"').strip("'")[:100]
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s == "---" or s.startswith("name:"):
+            continue
+        return s.lstrip("# ").strip()[:100]
+    return None
+
+
+# §10.3 skill-drafts surface. Lists pending Hermes drafts with age + one-line
+# summary; drafts >30d are flagged STALE (memory.py emits the matching Tier 2
+# memory_anomaly_detected event). Reads the filesystem directly — no daemon needed.
+def cmd_skill_drafts() -> None:
+    import os
+    import time as _time
+    drafts_dir = os.path.expanduser("~/.hermes/skill-drafts")
+    if not os.path.isdir(drafts_dir):
+        print(dim(f"No skill-drafts dir at {drafts_dir}"))
+        print(dim("(Hermes draft-state pattern not yet bootstrapped — see P1.5-4 Step 8.)"))
+        return
+    entries = sorted(e for e in os.listdir(drafts_dir) if not e.startswith("."))
+    print("Hermes skill drafts (~/.hermes/skill-drafts/):")
+    if not entries:
+        print(dim("  (none — drafts dir is empty)"))
+        return
+    stale_cutoff = _STALE_DRAFT_DAYS * 86400
+    for name in entries:
+        skill_path = os.path.join(drafts_dir, name, "SKILL.md")
+        marker = "✓" if os.path.isfile(skill_path) else "?"
+        try:
+            mt = os.path.getmtime(skill_path if os.path.isfile(skill_path)
+                                  else os.path.join(drafts_dir, name))
+            age_s = int(_time.time() - mt)
+        except OSError:
+            age_s = None
+        if age_s is None:
+            age_disp = dim("age unknown")
+        elif age_s > stale_cutoff:
+            age_disp = red(f"{_dur(age_s)} old — STALE >{_STALE_DRAFT_DAYS}d")
+        else:
+            age_disp = dim(f"{_dur(age_s)} old")
+        print(f"  {marker} {name:<28} {age_disp}")
+        summary = _draft_summary(skill_path)
+        if summary:
+            print(f"      {dim(summary)}")
+    print(dim("Review with: invoke `approve-draft` skill in Hermes (or edit / discard)."))
+
+# §8.8 curated-tier GC surface. Lists pending prune/merge proposals from the
+# janitor (~/monarch-stack/curated_gc_proposer.py). Reads the filesystem directly
+# — no daemon needed; mirrors cmd_skill_drafts.
+def cmd_curated_gc() -> None:
+    import os
+    import json as _json
+    import time as _time
+    d = os.path.expanduser("~/.hermes/gc-proposals")
+    if not os.path.isdir(d):
+        print(dim(f"No curated-GC proposals dir at {d}"))
+        print(dim("(Janitor not yet run — ~/monarch-stack/curated_gc_proposer.py, weekly cron.)"))
+        return
+    files = sorted(f for f in os.listdir(d) if f.endswith(".json"))
+    print("Curated-tier GC proposals (~/.hermes/gc-proposals/):")
+    if not files:
+        print(dim("  (none — curated tier is clean; a healthy state)"))
+        return
+    stale_cutoff = 30 * 86400
+    for f in files:
+        try:
+            p = _json.load(open(os.path.join(d, f)))
+        except (OSError, ValueError):
+            continue
+        try:
+            age_s = int(_time.time() - os.path.getmtime(os.path.join(d, f)))
+        except OSError:
+            age_s = 0
+        age = red(f"{_dur(age_s)} old — STALE") if age_s > stale_cutoff else dim(f"{_dur(age_s)} old")
+        print(f"  {p.get('id','?'):<18} {p.get('class','?'):<14} {p.get('kind','?'):<14} "
+              f"{p.get('target','?')}  {age}")
+        if p.get("rationale"):
+            print(f"      {dim(p['rationale'][:110])}")
+    print(dim("Apply: curated_gc_proposer.py --apply <id>  |  reject: --reject <id>  "
+              "(apply = operator-explicit Tier-3)"))
+
+def cmd_profile_drift() -> None:
+    """Show the EverCore profile-drift digest (§15 Item 13). Reads the JSON
+    written by ~/monarch-stack/evercore_profile_drift_check.sh (nightly 03:00 ET)."""
+    import os
+    f = os.path.expanduser("~/.local/state/loki/evercore_profile_drift.json")
+    print(bold("── EverCore Profile Drift (§15 Item 13) ─────────────────"))
+    if not os.path.isfile(f):
+        print(dim(f"  No digest at {f}"))
+        print(dim("  (Run evercore_profile_drift_check.sh — nightly cron 03:00 ET.)"))
+        return
+    d = json.load(open(f))
+    drift = d.get("drift")
+    print(f"  Status : {red('DRIFT ⚠') if drift else green('no drift')}")
+    print(f"  Checked: {d.get('timestamp')}")
+    if d.get("note"):
+        print(f"  Note   : {dim(d['note'])}")
+    added, removed = d.get("added", []), d.get("removed", [])
+    if added:
+        print(f"  {yellow('Added since baseline')} ({len(added)}):")
+        for a in added[:20]:
+            print(f"    {green('+')} {a}")
+    if removed:
+        print(f"  {yellow('Removed since baseline')} ({len(removed)}):")
+        for r in removed[:20]:
+            print(f"    {red('-')} {r}")
+    if d.get("vault_changed_since_baseline"):
+        print(f"  {yellow('⚠ vault operator.md changed since baseline')}")
+    if not drift:
+        print(dim(f"  {d.get('live_fact_count', d.get('fact_count','?'))} profile facts tracked"))
+    print(dim("\n  After operator review: evercore_profile_drift_check.sh --acknowledge"))
+
+
+def cmd_evercore(model) -> None:
+    """EverCore (L7) substrate detail — composite health sub-probes + rerank."""
+    print(bold("── EverCore (L7 EverMemOS) ──────────────────────────────"))
+    comps = {c.name: c for c in model.health.components}
+    ev = comps.get("evercore")
+    if ev is None:
+        print(dim("  evercore not registered yet — restart the daemon to pick up schema."))
+        return
+    ev_str = {
+        HealthStatus.OK: green("OK"), HealthStatus.UNRESPONSIVE: red("DOWN"),
+        HealthStatus.DEGRADED: yellow("DEGRADED"), HealthStatus.UNKNOWN: dim("UNKNOWN"),
+    }.get(ev.status, str(ev.status))
+    ms = f"{ev.response_ms}ms" if ev.response_ms else "—"
+    print(f"  Overall  : {ev_str}  ({ms}, checked {_ago(ev.last_check)})")
+    if ev.detail:
+        print("  Substrate:")
+        for tok in ev.detail.split():
+            if ":" in tok:
+                label, st = tok.split(":", 1)
+                print(f"    {label:<8}: {green('ok') if st == 'ok' else red(st)}")
+    rr = comps.get("rerank-bge")
+    if rr is not None:
+        rs = green("OK") if rr.status == HealthStatus.OK else red(str(rr.status))
+        print(f"  rerank-bge :8088 : {rs}")
+    print(dim("  Redis published on :6380 (6379 reserved for P1.5-6 L1 Redis)"))
+
+
+def cmd_schedule(model) -> None:
+    """Cron reconciliation — upcoming 60 min, missed 24h, collisions, stale."""
+    s = model.schedule
+    print(bold("── Schedule (cron) ──────────────────────────────────────"))
+
+    up = getattr(s, "upcoming_60min", [])
+    print(f"  {bold('Upcoming (next 60 min)')}:")
+    if up:
+        for r in up:
+            print(f"    {_local_hm(r.next_run)}  {r.name}")
+    else:
+        print(f"    {dim('none')}")
+
+    stale = getattr(s, "stale_entries", [])
+    if stale:
+        print(f"\n  {red('Stale entries')} (target script missing):")
+        for name in stale:
+            print(f"    {red('✗')} {name}")
+
+    missed = getattr(s, "missed_runs_24h", [])
+    if missed:
+        print(f"\n  {yellow('Missed runs (last 24h)')}:")
+        for m in missed:
+            print(f"    {yellow('⚠')} {m.name}  due {_local_hm(m.scheduled_for)}  "
+                  f"(log {_ago(m.last_log_mtime)})")
+
+    coll = getattr(s, "collisions", [])
+    if coll:
+        print(f"\n  {yellow('Collisions (next 60 min, <5 min apart)')}:")
+        for c in coll:
+            print(f"    {c.job_a} / {c.job_b}  {_local_hm(c.run_a)}±{c.gap_sec}s")
+
+    total = len(getattr(s, "cron_entries", []))
+    print(f"\n  {dim(f'{total} cron entries tracked')}  ·  "
+          f"updated {_ago(getattr(s, 'cron_updated_at', None))}")
+
+
+# ─── Decision engine surface (§12.6 / §9.5) ──────────────────────────────────
+
+_TIER_LABEL = {
+    1: "Tier 1 (auto-immediate)",
+    2: "Tier 2 (auto+log)",
+    3: "Tier 3 (ask)",
+}
+
+def _tier_str(tier) -> str:
+    n = int(tier)
+    label = _TIER_LABEL.get(n, f"Tier {n}")
+    return red(label) if n == 3 else (yellow(label) if n == 2 else green(label))
+
+
+def cmd_decisions(model) -> None:
+    """Pending operator asks raised by the decision engine + last tick."""
+    print(bold("── Decisions (pending asks) ─────────────────────────────"))
+    d = getattr(model, "decisions", None)
+    asks = getattr(d, "pending_asks", []) if d else []
+    if not asks:
+        print(f"  {dim('No pending asks')}")
+    for a in asks:
+        kind = a.kind.upper()
+        tier_tag = a.params.get("tier")
+        tier_tag = f"  [{tier_tag}]" if tier_tag else ""
+        block = dim("blocking") if a.blocking else dim("non-blocking")
+        print(f"  {yellow('●')} {bold(a.action_id)}{tier_tag}  "
+              f"{_tier_str(a.tier)}  {dim(kind)}  {block}")
+        print(f"      {dim(a.rationale)}")
+        print(f"      {dim('proposed ' + _ago(a.proposed_at))}")
+    if asks:
+        print(dim("\n  Approve a run / promotion:  loki-q authority promote <action_id>"))
+    print(f"\n  Last tick: {_ago(getattr(d, 'last_tick', None)) if d else dim('never')}")
+
+
+AUTHORITY_SUBCOMMANDS = ("list", "promote", "demote", "veto")
+
+
+def cmd_authority(args) -> None:
+    """list | promote <action_id> | demote <action_id> [reason] | veto <action_id>
+
+    Reads/writes authority.json directly (canonical N=12 ledger) — works
+    without the daemon; the running engine reloads the ledger each tick.
+    `veto` cancels the next pending run of a non-blocking Tier-3 action (§10.3).
+
+    Pass --json for a single machine-readable result object
+    {ok, action, action_id, result, detail} (list adds `records`). The Command
+    Center's control surface parses this instead of scraping human prose, so a
+    CLI wording change can't silently read as a failure (review A2)."""
+    from loki.authority import AuthorityLedger, PROMOTION_THRESHOLD
+    import json as _json
+
+    json_mode = "--json" in args
+    args = [a for a in args if a != "--json"]
+    sub = args[1].lower() if len(args) > 1 else "list"
+    action_id = args[2] if len(args) > 2 else None
+
+    led = AuthorityLedger()
+    led.load()
+
+    def _result(ok, result, detail="", code=0, **extra):
+        """Terminal: emit the machine object on --json (nothing on the human path,
+        which already printed) and exit with a returncode that mirrors ok."""
+        if json_mode:
+            payload = {"ok": ok, "action": sub, "action_id": action_id,
+                       "result": result, "detail": detail}
+            payload.update(extra)
+            print(_json.dumps(payload))
+        if code:
+            sys.exit(code)
+
+    if sub == "list":
+        rows = led.records_list()
+        if json_mode:
+            return _result(True, "ok",
+                           records=[r.model_dump(mode="json") for r in rows])
+        print(bold("── Authority ledger (§9.5.2 N=12) ───────────────────────"))
+        if not rows:
+            print(f"  {dim('No actions registered')}")
+        for r in rows:
+            state_str = {
+                ActionLifecycleState.COLD_START: dim("cold_start"),
+                ActionLifecycleState.ELIGIBLE:   yellow("ELIGIBLE ⬆"),
+                ActionLifecycleState.PROMOTED:   green("promoted"),
+                ActionLifecycleState.DEMOTED:    red("demoted"),
+            }.get(r.state, str(r.state))
+            outcome = r.last_outcome or "—"
+            print(f"  {bold(r.action_id)}")
+            print(f"      {_tier_str(r.current_tier)} → cap {_tier_str(r.target_tier)}  "
+                  f"runs:{r.clean_run_count}/{PROMOTION_THRESHOLD} clean  "
+                  f"({r.total_runs} total)  {state_str}")
+            print(f"      {dim(r.description)}")
+            print(f"      {dim('last: ' + outcome + '  ' + _ago(r.last_fired))}"
+                  + (f"  {red('demote: ' + r.demotion_reason)}" if r.demotion_reason else ""))
+        return
+
+    if sub in ("promote", "demote"):
+        if action_id is None:
+            if not json_mode:
+                print(red(f"Usage: loki-q authority {sub} <action_id>"))
+            return _result(False, "usage_error", f"{sub} requires <action_id>", code=1)
+        row = led.get(action_id)
+        if row is None:
+            if not json_mode:
+                print(red(f"Unknown action: {action_id}"))
+                print(dim(f"Known: {', '.join(a.action_id for a in led.records_list())}"))
+            return _result(False, "unknown_action", f"unknown action {action_id}", code=1)
+
+        if sub == "promote":
+            # Dual semantics (matches §9.5.2 + soak): an ELIGIBLE action's
+            # promotion ask is approved (tier bump); otherwise this is a
+            # one-shot per-run approval of a cold-start / Tier-3 run.
+            if row.state == ActionLifecycleState.ELIGIBLE:
+                if led.promote(action_id):
+                    tier = int(led.get(action_id).current_tier)
+                    if not json_mode:
+                        print(green(f"✓ {action_id} promoted to Tier {tier}"))
+                    return _result(True, "promoted", f"promoted to Tier {tier}")
+                if not json_mode:
+                    print(yellow(f"{action_id} could not be promoted (already at cap?)"))
+                return _result(False, "noop", "already at cap")
+            led.approve_run(action_id)
+            if not json_mode:
+                print(green(f"✓ approved one run for {action_id} "
+                            f"(Tier {int(row.current_tier)}); engine executes next tick"))
+            return _result(True, "approved",
+                           f"approved one run (Tier {int(row.current_tier)})")
+
+        # demote
+        reason = " ".join(args[3:]) if len(args) > 3 else "operator regret (CLI demote)"
+        if led.demote(action_id, reason):
+            if not json_mode:
+                print(yellow(f"✓ {action_id} demoted to Tier 3 (count reset): {reason}"))
+            return _result(True, "demoted", reason)
+        if not json_mode:
+            print(red(f"Could not demote {action_id}"))
+        return _result(False, "noop", "could not demote")
+
+    if sub == "veto":
+        # §9.5.1 / §10.3: cancel the next pending run of a non-blocking Tier-3
+        # action (e.g. offload_t1_reasoning) before its veto window elapses.
+        if action_id is None:
+            if not json_mode:
+                print(red("Usage: loki-q authority veto <action_id>"))
+            return _result(False, "usage_error", "veto requires <action_id>", code=1)
+        if led.get(action_id) is None:
+            if not json_mode:
+                print(red(f"Unknown action: {action_id}"))
+                print(dim(f"Known: {', '.join(a.action_id for a in led.records_list())}"))
+            return _result(False, "unknown_action", f"unknown action {action_id}", code=1)
+        led.veto_run(action_id)
+        if not json_mode:
+            print(yellow(f"✓ vetoed next run of {action_id} — the engine cancels its "
+                         f"pending non-blocking ask on the next tick"))
+        return _result(True, "vetoed", "vetoed next run")
+
+    if not json_mode:
+        print(red(f"Unknown authority subcommand: {sub}"))
+        print(dim("Usage: loki-q authority {list|promote <id>|demote <id> [reason]|veto <id>}"))
+    return _result(False, "unknown_subcommand", f"unknown subcommand {sub}", code=1)
+
+
+def cmd_doctrine_lint() -> None:
+    """Show the latest doctrine-lint result (§15.5). Reads the JSON written by
+    ~/monarch-stack/doctrine_lint.py (nightly cron 03:15 ET)."""
+    import os
+    f = os.path.expanduser("~/.local/state/loki/doctrine_lint.json")
+    print(bold("── Doctrine Lint (§15.5) ────────────────────────────────"))
+    if not os.path.isfile(f):
+        print(dim(f"  No lint result at {f}"))
+        print(dim("  (Run ~/monarch-stack/doctrine_lint.py — nightly cron 03:15 ET.)"))
+        return
+    d = json.load(open(f))
+    clean = d.get("clean")
+    print(f"  Status : {green('clean') if clean else red('DRIFT ⚠')}")
+    print(f"  Checked: {d.get('timestamp')}  ({d.get('checks_total','?')} checks)")
+    for r in d.get("fails", []):
+        print(f"  {red('FAIL')} {r['check']}: {r['detail']}")
+    for r in d.get("warns", []):
+        print(f"  {yellow('WARN')} {r['check']}: {r['detail']}")
+    if clean and not d.get("warns"):
+        print(dim("  doctrine matches disk."))
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if not args:
+        print(USAGE)
+        sys.exit(0)
+
+    cmd = args[0].lower()
+
+    # skill-drafts and profile-drift read the filesystem directly; no state file needed.
+    if cmd == "skill-drafts":
+        cmd_skill_drafts()
+        return
+    if cmd == "curated-gc":
+        cmd_curated_gc()
+        return
+    if cmd == "profile-drift":
+        cmd_profile_drift()
+        return
+    if cmd == "doctrine-lint":
+        cmd_doctrine_lint()
+        return
+    # authority reads/writes authority.json directly — no state.json needed.
+    if cmd == "authority":
+        cmd_authority(args)
+        return
+
+    model = StateStore.load_from_disk()
+    if model is None:
+        if cmd == "json":
+            print("{}")
+            sys.exit(1)
+        print(red(f"No state file found at {StateStore.__module__}"))
+        print(dim("Is the Loki daemon running?  tmux attach -t inference → loki window"))
+        print(dim("Or: cd ~/projects/loki && python3 daemon.py"))
+        sys.exit(1)
+
+    if cmd == "vram":
+        cmd_vram(model)
+    elif cmd == "health":
+        cmd_health(model)
+    elif cmd == "tiers":
+        cmd_tiers(model)
+    elif cmd == "workloads":
+        cmd_workloads(model)
+    elif cmd == "quotas":
+        cmd_quotas(model)
+    elif cmd == "memory":
+        cmd_memory(model)
+    elif cmd == "decisions":
+        cmd_decisions(model)
+    elif cmd == "events":
+        n = int(args[1]) if len(args) > 1 else 20
+        cmd_events(model, n)
+    elif cmd == "evercore":
+        cmd_evercore(model)
+    elif cmd == "schedule":
+        cmd_schedule(model)
+    elif cmd == "all":
+        cmd_all(model)
+    elif cmd == "json":
+        print(json.dumps(model.model_dump(mode="json"), indent=2, default=str))
+    else:
+        print(f"Unknown command: {cmd}")
+        print(USAGE)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

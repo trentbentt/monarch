@@ -1,0 +1,70 @@
+#!/bin/sh
+""":"
+exec "$HOME/venv/inference/bin/python3" "$0" "$@"
+":"
+loki-voice — control the Phase 18 voice service.
+
+  loki-voice start                 # run the HTTP service (Ctrl-C to stop)
+  loki-voice health                # GET /healthz against the configured host:port
+  loki-voice say "text" [--no-play] [--out FILE]   # TTS smoke test
+"""
+from __future__ import annotations
+
+import argparse
+import http.client
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from loki.voice.config import load_config
+
+
+def cmd_start(_args) -> None:
+    from loki.voice.service import make_server
+    cfg = load_config()
+    srv = make_server(cfg)
+    print(f"loki-voice serving on http://{cfg.host}:{cfg.port}", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        srv.shutdown()
+
+
+def cmd_health(_args) -> None:
+    cfg = load_config()
+    c = http.client.HTTPConnection(cfg.host, cfg.port, timeout=5)
+    c.request("GET", "/healthz")
+    r = c.getresponse()
+    print(r.status, r.read().decode())
+    sys.exit(0 if r.status == 200 else 1)
+
+
+def cmd_say(args) -> None:
+    from loki.voice import tts
+    wav = tts.synthesize(args.text)
+    out = Path(args.out) if args.out else Path(tempfile.gettempdir()) / "loki-voice-say.wav"
+    out.write_bytes(wav)
+    if not args.no_play:
+        subprocess.run(["aplay", "-q", str(out)], check=False)
+    print(str(out))
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(prog="loki-voice")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("start").set_defaults(func=cmd_start)
+    sub.add_parser("health").set_defaults(func=cmd_health)
+    s = sub.add_parser("say")
+    s.add_argument("text")
+    s.add_argument("--no-play", action="store_true")
+    s.add_argument("--out")
+    s.set_defaults(func=cmd_say)
+    args = p.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
