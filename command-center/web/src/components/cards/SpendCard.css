@@ -1,0 +1,59 @@
+.spend-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--hairline);
+}
+.spend-summary-sub { flex: none; }
+
+.spend-rows { display: flex; flex-direction: column; gap: var(--s3); }
+.spend-row { display: flex; flex-direction: column; gap: var(--s1); }
+
+.spend-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.spend-name {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--frost);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The $ figure column: mono, tabular, right-aligned so figures stack cleanly. */
+.spend-fig {
+  flex: none;
+  font-size: 13px;
+  color: var(--frost);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.spend-row.st-warn .spend-fig { color: var(--caution); }
+.spend-row.st-crit .spend-fig { color: var(--alert); }
+
+/* Unmetered subscription rows — explicit "no cap" tag marks them as a class. */
+.spend-sub { display: flex; align-items: center; gap: var(--s2); }
+.spend-tag {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+  flex: none;
+}
+.spend-sub-text { color: var(--faint); }
+
+.spend-burn { color: var(--muted); }
+.spend-burn-val { color: var(--muted); }
+
+.spend-empty { padding: var(--s4) 0; }

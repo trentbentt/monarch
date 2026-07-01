@@ -1,0 +1,78 @@
+/* L1->L7 as a vertical ladder: each rung a row in the stack, ordered top-down,
+   names + role + response-ms aligned on a shared grid so it reads as one strip. */
+.memory-ladder {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.memory-rung {
+  display: grid;
+  grid-template-columns: 2.2ch 7px 1fr auto;
+  align-items: center;
+  column-gap: var(--s2);
+  padding: 7px var(--s3);
+}
+.memory-rung + .memory-rung { border-top: 1px solid var(--hairline); }
+
+.memory-rung-id { font-size: 11px; color: var(--muted); }
+.memory-rung-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--st, var(--unknown)); flex: none;
+}
+.memory-rung-name {
+  font-family: var(--font-display);
+  font-size: 13px; font-weight: 600; color: var(--frost);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.memory-rung-role {
+  grid-column: 3;
+  color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.memory-rung-role.is-anomaly { color: var(--caution); }
+.memory-rung-ms {
+  grid-row: 1 / span 2;
+  grid-column: 4;
+  align-self: center;
+  font-size: 13px; color: var(--frost);
+  text-align: right;
+}
+/* role drops onto its own line under the name; ms spans both rows at right */
+.memory-rung { grid-template-rows: auto auto; }
+.memory-rung-id { grid-row: 1; }
+.memory-rung-dot { grid-row: 1; }
+.memory-rung-name { grid-row: 1; }
+
+/* queues: two equal stats, divided */
+.memory-queues {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s4);
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+.memory-stat { display: flex; flex-direction: column; gap: 3px; }
+.memory-stat-row { display: flex; align-items: baseline; gap: var(--s2); }
+.memory-stat .t-metric-sm { color: var(--frost); }
+.memory-stat.st-warn .t-metric-sm { color: var(--caution); }
+.memory-stale { font-size: 11px; color: var(--caution); }
+
+.memory-foot {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: var(--s3);
+}
+.memory-foot-label { color: var(--muted); }
+.memory-foot-val { font-size: 12px; color: var(--frost); }
+
+.memory-empty { padding: var(--s4) 0; }
+
+/* narrow: tighten rungs, stack queue stats so neither truncates */
+@media (max-width: 560px) {
+  .memory-rung { padding: 6px var(--s2); column-gap: 6px; }
+  .memory-queues { gap: var(--s3); }
+}

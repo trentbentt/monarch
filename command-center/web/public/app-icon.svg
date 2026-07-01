@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00D4FF" stop-opacity="1"/>
+      <stop offset="55%" stop-color="#00D4FF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#00D4FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#04040F"/>
+  <rect x="6" y="6" width="500" height="500" rx="106" fill="none" stroke="#0E2A33" stroke-width="2"/>
+  <!-- radar rings -->
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#00D4FF" stroke-width="3" opacity="0.18"/>
+  <circle cx="256" cy="256" r="112" fill="none" stroke="#00D4FF" stroke-width="3.5" opacity="0.3"/>
+  <circle cx="256" cy="256" r="74"  fill="none" stroke="#00D4FF" stroke-width="4" opacity="0.5"/>
+  <!-- lattice ticks -->
+  <g stroke="#00D4FF" stroke-width="5" stroke-linecap="round" opacity="0.4">
+    <line x1="256" y1="60"  x2="256" y2="120"/>
+    <line x1="256" y1="392" x2="256" y2="452"/>
+    <line x1="60"  y1="256" x2="120" y2="256"/>
+    <line x1="392" y1="256" x2="452" y2="256"/>
+  </g>
+  <!-- glowing core -->
+  <circle cx="256" cy="256" r="120" fill="url(#core)"/>
+  <circle cx="256" cy="256" r="34" fill="#00D4FF"/>
+</svg>

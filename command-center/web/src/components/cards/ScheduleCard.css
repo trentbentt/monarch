@@ -1,0 +1,38 @@
+.schedule-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+/* Counts are the signal: lift them to instrument-readout scale, and let a
+   non-zero count carry its status color so warn reads at a glance. */
+.schedule-stats .ic-cell-value { font-size: 22px; line-height: 1; margin-top: 1px; }
+.schedule-stats .ic-cell.st-warn .ic-cell-value { color: var(--caution); }
+.schedule-stats .ic-cell.st-unknown .ic-cell-value { color: var(--muted); }
+
+.schedule-tl { margin-bottom: var(--s2); }
+
+/* Stale caution: an intentional inset note, marked by a left rail + dot,
+   body text kept legible (mono names, muted prose) rather than washed amber. */
+.schedule-stale {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin-top: var(--s4);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  border-left: 2px solid var(--caution);
+  background: color-mix(in srgb, var(--caution) 8%, var(--panel-2));
+}
+.schedule-stale-dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--st, var(--caution));
+  flex: none;
+}
+.schedule-stale-body { color: var(--muted); }
+.schedule-stale-lead { color: var(--frost); }
+.schedule-stale-names { color: var(--caution); }

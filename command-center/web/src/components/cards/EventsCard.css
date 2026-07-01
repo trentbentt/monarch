@@ -1,0 +1,29 @@
+/* Severity tally — a calm legend above the operations log. */
+.events-tally {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s4);
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.events-c {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s1);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Mono count reads as the instrument number; label stays quiet. */
+.events-c b {
+  font-weight: 500;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--frost);
+}
+
+/* Spend status color only on the count, and only where it matters. */
+.events-c.warn b { color: var(--caution); }
+.events-c.crit b { color: var(--alert); }

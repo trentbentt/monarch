@@ -1,0 +1,12 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+pydantic==2.10.4
+pywebpush==2.0.3
+cryptography==44.0.0
+# Read-only Postgres reads: L3 vault semantic search (via the Loki retrieval
+# layer) and the dormant Workflows live reader. Optional at runtime — both
+# degrade to a clear note when it's absent.
+psycopg2-binary==2.9.10
+pytest==8.3.4
+pytest-asyncio==0.25.2
