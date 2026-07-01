@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Backups from in-place edits — keep on disk, don't track
+*.v0.1
+*.broken
+*.bak
+*.pre-*-rebalance
+*.pre-*-fix
+*.pre-*-patch
+
+# Runtime state (lives in ~/.local/state/loki/, but defensive)
+state.json
+state.json.tmp
+daemon.log
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.patch-backups/
+*.preB-backup
+*.zombie-fix-backup
+*.preB-section-backup
+*.D3-close-backup
+
+# Regenerable held-out eval set (rebuild via build_eval_set.py)
+loki/voice/training/eval_data/
+
+# Operator voice recordings — never commit (rebuild via realmic_recorder)
+loki/voice/training/realmic_eval/
+loki/voice/training/realmic_train/
+
+# Credential safety net — these should never be in a public repo, but if they appear:
+*.env
+.env
+*.key
+*.pem
+*.p12
+*.pfx
+*secret*
+*credential*
+*api_key*
+*.sqlite
+*.db
+
+# ── Public-surface leak guards (§0.4) — keep on disk, never on the public skeleton ──
+# Trained wake-word model embeds local build paths in ONNX stack_trace metadata;
+# regenerable via the voice training pipeline.
+loki/voice/models/*.onnx
+loki/voice/models/*.onnx.data
+# Operator working docs (plans/specs) and internal infra notes — private umbrella only.
+docs/superpowers/
+PHASE_B_litellm_path_a.md

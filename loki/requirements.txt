@@ -1,0 +1,2 @@
+pydantic>=2.0.0
+croniter>=2.0.0   # cron listener schedule parsing (loki/listeners/cron.py)
