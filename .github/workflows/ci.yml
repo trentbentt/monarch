@@ -1,0 +1,57 @@
+name: CI
+
+# The contracts/ conformance suite is the monorepo's load-bearing guard: it
+# fails loudly when any producer or consumer drifts from a shared shape. Before
+# this workflow it ran only when someone remembered to invoke pytest by hand
+# (the sole workflow was the Tauri desktop build), so the seam it protects could
+# regress silently (review H5). This runs every cross-boundary + unit suite on
+# push and PR so the guard actually fires.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: contracts + loki + command-center
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Loki core (the daemon/brain). The voice subsystem (faster-whisper /
+          # piper + acoustic models) needs a GPU/model environment and is
+          # excluded from CI below, so we install only the core deps here.
+          pip install -r loki/requirements.txt pytest hypothesis
+          # Command Center server pins its full set, incl. pytest-asyncio and
+          # pywebpush that the async + Web Push tests require.
+          pip install -r command-center/server/requirements.txt
+
+      - name: contracts — cross-boundary conformance (the seam guard)
+        run: pytest contracts/tests -q
+
+      - name: loki — daemon, authority ledger, listeners (excl. voice/GPU)
+        working-directory: loki
+        run: pytest -q --ignore=loki/voice
+
+      - name: command-center server — API, control surface, security
+        working-directory: command-center/server
+        # Point the loki bridges at the in-repo tree so a clean checkout resolves
+        # without the operator's ~/projects/loki (which CI does not have).
+        env:
+          CC_LOKI_ROOT: ${{ github.workspace }}/loki
+        run: pytest -q
+
+      - name: monarch-stack — janitor logic + write safety
+        # Private-only: monarch-stack is not part of the public skeleton, so this
+        # step no-ops there (hashFiles is empty when the dir is absent).
+        if: ${{ hashFiles('monarch-stack/**/*.py') != '' }}
+        working-directory: monarch-stack
+        run: pytest -q
