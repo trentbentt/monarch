@@ -1,0 +1,2538 @@
+{
+  "daemon_pid": 0,
+  "decisions": {
+    "last_tick": "2026-06-18T00:03:03.819274Z",
+    "ledger": [
+      {
+        "action_id": "auto_restart_cpu_dataplane_tier",
+        "clean_run_count": 2,
+        "current_tier": 3,
+        "demotion_reason": null,
+        "description": "Restart a crashed zero-VRAM CPU dataplane tier (T3/T5) via idempotent per-tier launch script",
+        "last_fired": "2026-05-30T21:43:44.464772Z",
+        "last_outcome": "ok",
+        "state": "cold_start",
+        "target_tier": 2,
+        "total_runs": 2
+      },
+      {
+        "action_id": "offload_t1_reasoning",
+        "clean_run_count": 0,
+        "current_tier": 3,
+        "demotion_reason": null,
+        "description": "Offload a portion of T1 reasoning GPU\u2192CPU/DDR5 (reduced -ngl) to free VRAM for a burst (\u00a710.3)",
+        "last_fired": null,
+        "last_outcome": null,
+        "state": "cold_start",
+        "target_tier": 3,
+        "total_runs": 0
+      },
+      {
+        "action_id": "restore_t1_reasoning",
+        "clean_run_count": 1,
+        "current_tier": 2,
+        "demotion_reason": null,
+        "description": "Restore T1 reasoning to full GPU residency (-ngl 40) after an offload (\u00a710.3)",
+        "last_fired": "2026-06-17T17:04:21.168101Z",
+        "last_outcome": "ok",
+        "state": "cold_start",
+        "target_tier": 2,
+        "total_runs": 92
+      }
+    ],
+    "pending_asks": []
+  },
+  "events": {
+    "log": [
+      {
+        "data": {},
+        "detail": "t1 stopped -> active (recovered)",
+        "event_id": "08bc4c18",
+        "severity": "info",
+        "tier": "t1",
+        "timestamp": "2026-06-17T05:22:24.926773Z",
+        "type": "tier_state_change",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t3 stopped -> active (recovered)",
+        "event_id": "0e47b6af",
+        "severity": "info",
+        "tier": "t3",
+        "timestamp": "2026-06-17T05:22:24.926796Z",
+        "type": "tier_state_change",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t4 stopped -> active (recovered)",
+        "event_id": "63ef9795",
+        "severity": "info",
+        "tier": "t4",
+        "timestamp": "2026-06-17T05:22:24.926806Z",
+        "type": "tier_state_change",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t5 stopped -> active (recovered)",
+        "event_id": "491ab653",
+        "severity": "info",
+        "tier": "t5",
+        "timestamp": "2026-06-17T05:22:24.926813Z",
+        "type": "tier_state_change",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "1 new curated-GC proposal(s) pending (total 1) \u2014 review with `loki-q curated-gc`",
+        "event_id": "2b71048d",
+        "severity": "warning",
+        "tier": null,
+        "timestamp": "2026-06-17T05:24:24.935729Z",
+        "type": "memory_anomaly_detected",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "pg-backup and news-ingest run within 0s (next 60 min)",
+        "event_id": "b63cb82b",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T05:30:24.925213Z",
+        "type": "cron_collision_warning",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "pid": 911200,
+          "restart_count_24h": 1
+        },
+        "detail": "t1 process restarted (pid 911200)",
+        "event_id": "238b64fa",
+        "severity": "info",
+        "tier": "t1",
+        "timestamp": "2026-06-17T05:45:55.350358Z",
+        "type": "tier_restart",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "pid": 911804,
+          "restart_count_24h": 1
+        },
+        "detail": "t2 process restarted (pid 911804)",
+        "event_id": "e22a597c",
+        "severity": "info",
+        "tier": "t2",
+        "timestamp": "2026-06-17T05:46:25.359744Z",
+        "type": "tier_restart",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "free_mb": 1479,
+          "oom_risk": "elevated",
+          "previous_risk": "low",
+          "used_mb": 22639
+        },
+        "detail": "OOM risk: low -> elevated (free: 1479 MiB)",
+        "event_id": "2e2ae20d",
+        "severity": "warning",
+        "tier": null,
+        "timestamp": "2026-06-17T05:46:26.016194Z",
+        "type": "oom_risk_changed",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t2 active -> failed: unresponsive",
+        "event_id": "ca41e9ad",
+        "severity": "warning",
+        "tier": "t2",
+        "timestamp": "2026-06-17T05:46:27.044558Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "free_mb": 16579
+        },
+        "detail": "OOM risk cleared: elevated -> low (free: 16579 MiB)",
+        "event_id": "dae2a2e2",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T05:46:31.050216Z",
+        "type": "oom_risk_resolved",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "free_mb": 105,
+          "oom_risk": "imminent",
+          "previous_risk": "low",
+          "used_mb": 24013
+        },
+        "detail": "OOM risk: low -> imminent (free: 105 MiB)",
+        "event_id": "1152cd78",
+        "severity": "critical",
+        "tier": null,
+        "timestamp": "2026-06-17T05:49:47.393800Z",
+        "type": "oom_risk_changed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "free_mb": 2147
+        },
+        "detail": "OOM risk cleared: imminent -> low (free: 2147 MiB)",
+        "event_id": "3650a057",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T05:51:12.952130Z",
+        "type": "oom_risk_resolved",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "pid": 914875,
+          "restart_count_24h": 2
+        },
+        "detail": "t1 process restarted (pid 914875)",
+        "event_id": "9ebb22c4",
+        "severity": "info",
+        "tier": "t1",
+        "timestamp": "2026-06-17T05:51:25.438291Z",
+        "type": "tier_restart",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "news-ingest and evercore_profile_drift_check.sh run within 0s (next 60 min)",
+        "event_id": "5d28bda6",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T06:30:25.187791Z",
+        "type": "cron_collision_warning",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "news-ingest and evercore_mongo_backup.sh run within 0s (next 60 min)",
+        "event_id": "9cdc50c9",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T07:00:25.327725Z",
+        "type": "cron_collision_warning",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "news-ingest and l1_snapshot_pg.py run within 0s (next 60 min)",
+        "event_id": "8c1a9408",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T07:30:25.451822Z",
+        "type": "cron_collision_warning",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "news-ingest and news-sync run within 0s (next 60 min)",
+        "event_id": "1136a7fe",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T09:00:25.848209Z",
+        "type": "cron_collision_warning",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "news-ingest and news-compile run within 0s (next 60 min)",
+        "event_id": "fb4ee527",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T09:30:25.981467Z",
+        "type": "cron_collision_warning",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "5f5482ad",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T11:00:09.702802Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "556f2845",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:03:17.768873Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "e71cdf0e",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T11:04:10.064192Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "70044cd6",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:07:17.810402Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "58b550ed",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:11:17.843503Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "f318501b",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:15:17.881062Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "a003cc92",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T11:16:11.137718Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "4920384a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:19:17.914077Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "1cb18e4a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:23:17.952506Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "6afe2a9f",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:27:17.985996Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "f3653e9d",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T11:28:12.150253Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "b7ee5e33",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:31:18.022460Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "29aa3f4c",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:35:18.063328Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "5778fe43",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:39:18.096829Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "bf74a1b7",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T11:40:13.254734Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "8f66ea45",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:43:18.136333Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "abcd325a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:47:18.169524Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "bec2a7f7",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:51:18.205291Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "63ba067c",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T11:52:14.262901Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "28524c6b",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:55:18.246809Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "75d205d4",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T11:59:18.280822Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "394ce618",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:03:18.319349Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "c7c3d044",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T12:04:15.294920Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "ce826c4b",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:07:18.355970Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "2edee9e5",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:11:18.391928Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "d4900bd0",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:15:18.427451Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "b21bd979",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T12:16:16.328967Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "0df1b023",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:19:18.464067Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "17ba1355",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:23:18.504269Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "0b0762ca",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:27:18.547746Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "75974e58",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T12:28:17.379666Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "dc06ebc7",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:31:18.584328Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "9e7f53c6",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:35:18.622874Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "e1171504",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:39:18.665575Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "ce80a2a1",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T12:40:18.432812Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "764116ae",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:43:18.702085Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "49410b19",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:47:18.739875Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "1523b5c9",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:51:18.777915Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "abef1422",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T12:52:19.567614Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "0d664df7",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:55:18.816440Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "c5789680",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T12:59:18.855113Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "516ac06a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:03:18.891722Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "915428be",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T13:04:20.580030Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "99f39402",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:07:18.927382Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "7e604a10",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:11:18.968486Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "cbb117c8",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:15:19.004330Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "142a7add",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T13:16:21.582074Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "5da46f29",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:19:19.043350Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "43fcaab4",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:23:19.079316Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "ace97c82",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:27:19.115535Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "8a487d4e",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:31:19.150160Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "117138b5",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:35:19.190111Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "2026cdaa",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:39:19.224002Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "923a0157",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:43:19.254813Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "ef403f33",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:47:19.292630Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "c1a7d243",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:51:19.331428Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "0f5c9506",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:55:19.375293Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "c67d4273",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T13:59:19.417304Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "b0d7f8a5",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:03:19.457857Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "8db5a24e",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:07:19.495466Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "5dfd917b",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:11:19.534035Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "5c4515f3",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:15:19.573393Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "1d70066c",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:19:19.611215Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "a7b3885d",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:23:19.646125Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "8c7abfac",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:27:19.685016Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "d965c446",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:31:19.724841Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "a7b97a77",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:35:19.763022Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "a75123c0",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:39:19.804673Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "e9be565e",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:43:19.836855Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "edd328be",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:47:19.871747Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "9136b894",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:51:19.911306Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "c252a5de",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:55:19.945575Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "68c9d106",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T14:59:19.982696Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "ecd5ed6b",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:03:20.017910Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "d1d2703d",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:07:20.059359Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "77203960",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:11:20.097172Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "0776a9cf",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:15:20.135471Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "b4ab3065",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:19:20.179557Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "cf2d77ea",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:23:20.223920Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "479902bf",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T15:24:18.031499Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "fea9cfdb",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:27:20.258987Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "5e008a59",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:31:20.294973Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "21071227",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:35:20.332518Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "e697ee2c",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T15:36:19.057644Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "cd74a72a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:39:20.373024Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "7d264f55",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:43:20.409674Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "ae0d43eb",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:47:20.446373Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "d51fa31e",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T15:48:20.102869Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "2b65ab4c",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:51:20.484532Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "a70b202e",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:55:20.520832Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "124ccaf7",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T15:59:20.557137Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "e910b730",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T16:00:21.053945Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "631cfcf8",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:03:20.594566Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "cd58c28f",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:07:20.636385Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "c3061f55",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:11:20.674671Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "fd807786",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T16:12:22.104811Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "e2eeb18c",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:15:20.711776Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "004ebe04",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:19:20.746416Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "20dd6293",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:23:20.783548Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "77002714",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T16:24:23.107439Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "49a2dbfd",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:27:20.820865Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "3cb7752e",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:31:20.854060Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "9d7c4dc0",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:35:20.891890Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "20b26e07",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T16:36:24.170548Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "729f64d2",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:39:20.931094Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "fec62a6e",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:43:20.970405Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "29d1de77",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:47:21.005416Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "3de55e3e",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T16:48:25.127229Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "7d908f6a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:51:21.046984Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "8a24cecb",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:55:21.087687Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "ce3270a6",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T16:59:21.121228Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t1 active -> failed: unresponsive",
+        "event_id": "08deb285",
+        "severity": "warning",
+        "tier": "t1",
+        "timestamp": "2026-06-17T17:00:26.186779Z",
+        "type": "tier_health_failed",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "failed"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "d93a777a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T17:03:21.157468Z",
+        "type": "action",
+        "workload_id": null
+      },
+      {
+        "data": {},
+        "detail": "t2 active -> stopped: burst-idle, deepseek fallback active",
+        "event_id": "0ff2d17b",
+        "severity": "info",
+        "tier": "t2",
+        "timestamp": "2026-06-17T17:04:11.495587Z",
+        "type": "tier_burst_idle_entered",
+        "workload_id": null
+      },
+      {
+        "data": {
+          "action_id": "restore_t1_reasoning",
+          "outcome": "ok"
+        },
+        "detail": "overnight window closed; restoring T1 to full GPU residency (Tier 2 autonomous-with-log)",
+        "event_id": "da89347a",
+        "severity": "info",
+        "tier": null,
+        "timestamp": "2026-06-17T17:04:21.168077Z",
+        "type": "action",
+        "workload_id": null
+      }
+    ],
+    "retention_hours": 24
+  },
+  "hardware": {
+    "cpu": {
+      "cores_available": 10,
+      "cores_reserved": 2,
+      "cores_total": 12,
+      "model": "Ryzen 9 9900X"
+    },
+    "cuda_pin_packages": 11,
+    "cuda_pinned_version": "12.8",
+    "gpu": {
+      "arch": "Ampere SM86",
+      "cuda_capability": "8.6",
+      "model": "RTX 3090 FE",
+      "pcie_bandwidth_gbps": 32.0,
+      "pcie_gen": 4,
+      "pcie_lanes": 16,
+      "vram_reserve_driver_mb": 512,
+      "vram_total_mb": 24576,
+      "vram_usable_mb": 24064
+    },
+    "ram": {
+      "bandwidth_gbps": 96.0,
+      "ddr_generation": "DDR5",
+      "speed_mts": 6000,
+      "total_mb": 98304
+    },
+    "storage": {
+      "models_cache": "~/.cache/huggingface/hub",
+      "nvme_path": "/home/operator",
+      "nvme_total_gb": 4096
+    }
+  },
+  "health": {
+    "components": [
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "llama-server-t1",
+        "port": 8080,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": "deepseek fallback active (clean idle)",
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-17T17:03:56.465082Z",
+        "name": "llama-server-t2",
+        "port": 8083,
+        "response_ms": null,
+        "status": "idle"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "llama-server-t3",
+        "port": 8084,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "llama-server-t4",
+        "port": 8002,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "llama-server-t5",
+        "port": 8085,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "litellm",
+        "port": 4000,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "validation-gate",
+        "port": 4100,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "lora-dispatcher",
+        "port": 4200,
+        "response_ms": 1,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "n8n",
+        "port": 5678,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "postgres",
+        "port": 5432,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "monarch-postgres",
+        "port": 5433,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "embed-nomic",
+        "port": 8087,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": "last_index_activity 1298238s ago",
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "codebase-memory",
+        "port": null,
+        "response_ms": 4,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "hermes",
+        "port": 8642,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "rerank-bge",
+        "port": 8088,
+        "response_ms": 0,
+        "status": "ok"
+      },
+      {
+        "detail": "es:ok milvus:ok mongo:ok redis:ok api:ok",
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "evercore",
+        "port": 1995,
+        "response_ms": 4,
+        "status": "ok"
+      },
+      {
+        "detail": null,
+        "last_check": "2026-06-18T00:02:55.055991Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "name": "l1-redis",
+        "port": 6379,
+        "response_ms": 0,
+        "status": "ok"
+      }
+    ],
+    "last_full_sweep": "2026-06-18T00:02:55.055991Z"
+  },
+  "last_updated": "2026-06-18T00:03:08.322172Z",
+  "memory": {
+    "gc_proposals_stale": [],
+    "gc_proposals_total": 0,
+    "last_sweep": "2026-06-18T00:03:07.467176Z",
+    "layers": {
+      "L1": {
+        "activity_signal": null,
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "ok",
+        "last_check": "2026-06-18T00:03:07.467176Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "layer": "L1",
+        "mode": "state",
+        "name": "Redis",
+        "response_ms": 0,
+        "role": "Truth",
+        "source_component": "l1-redis"
+      },
+      "L2": {
+        "activity_signal": null,
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "ok",
+        "last_check": "2026-06-18T00:03:07.467176Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "layer": "L2",
+        "mode": "state",
+        "name": "Postgres",
+        "response_ms": 0,
+        "role": "Truth",
+        "source_component": "postgres"
+      },
+      "L3": {
+        "activity_signal": "118 chunks",
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "vector 0.8.2",
+        "last_check": "2026-06-18T00:02:37.457857Z",
+        "last_seen_healthy": "2026-06-18T00:02:37.457857Z",
+        "layer": "L3",
+        "mode": "probe",
+        "name": "pgvector",
+        "response_ms": 5,
+        "role": "Index",
+        "source_component": null
+      },
+      "L4": {
+        "activity_signal": "state.db 1d ago",
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "/health 200",
+        "last_check": "2026-06-18T00:03:07.467176Z",
+        "last_seen_healthy": "2026-06-18T00:03:07.467176Z",
+        "layer": "L4",
+        "mode": "probe",
+        "name": "Hermes",
+        "response_ms": 0,
+        "role": "Memory",
+        "source_component": null
+      },
+      "L5": {
+        "activity_signal": "last_index_activity 1298238s ago",
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "last_index_activity 1298238s ago",
+        "last_check": "2026-06-18T00:03:07.467176Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "layer": "L5",
+        "mode": "state",
+        "name": "Codebase-Memory",
+        "response_ms": 4,
+        "role": "Index",
+        "source_component": "codebase-memory"
+      },
+      "L6": {
+        "activity_signal": "last commit 19h ago",
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "clean",
+        "last_check": "2026-06-18T00:02:37.457857Z",
+        "last_seen_healthy": "2026-06-18T00:02:37.457857Z",
+        "layer": "L6",
+        "mode": "probe",
+        "name": "Obsidian vault",
+        "response_ms": 1,
+        "role": "Truth",
+        "source_component": null
+      },
+      "L7": {
+        "activity_signal": "es:ok milvus:ok mongo:ok redis:ok api:ok",
+        "anomaly": null,
+        "health": "ok",
+        "health_signal": "es:ok milvus:ok mongo:ok redis:ok api:ok",
+        "last_check": "2026-06-18T00:03:07.467176Z",
+        "last_seen_healthy": "2026-06-18T00:02:55.055991Z",
+        "layer": "L7",
+        "mode": "state",
+        "name": "EverCore",
+        "response_ms": 4,
+        "role": "Memory",
+        "source_component": "evercore"
+      }
+    },
+    "skill_drafts_stale": [],
+    "skill_drafts_total": 0
+  },
+  "operator": {
+    "active_session_id": null,
+    "last_input_detected": null,
+    "preferences": {
+      "overnight_window_end": "07:00",
+      "overnight_window_start": "23:00",
+      "voice_during_active": true,
+      "voice_during_idle": false,
+      "voice_during_sleeping": false
+    },
+    "state": "unknown",
+    "state_confidence": 0.0,
+    "updated_at": null
+  },
+  "quotas": {
+    "quotas": {
+      "frontier_direct": {
+        "budget_usd": null,
+        "burn_rate_per_hour": null,
+        "last_call_ts": null,
+        "last_updated": null,
+        "name": "frontier_direct",
+        "period": "monthly",
+        "period_end": null,
+        "period_start": null,
+        "projected_wall_at": null,
+        "provider": "anthropic",
+        "spend_today_usd": 0.0,
+        "status": "ok",
+        "threshold_critical_pct": 95.0,
+        "threshold_warning_pct": 80.0,
+        "tokens_in_today": 0,
+        "tokens_out_today": 0,
+        "used_pct": null,
+        "used_usd": 0.0,
+        "walls_in_window": 0
+      },
+      "peer_a": {
+        "budget_usd": 20.0,
+        "burn_rate_per_hour": 0.0,
+        "last_call_ts": "2026-06-17T17:04:51.758000Z",
+        "last_updated": "2026-06-18T00:02:35.421375Z",
+        "name": "peer_a",
+        "period": "monthly",
+        "period_end": null,
+        "period_start": null,
+        "projected_wall_at": null,
+        "provider": "deepseek",
+        "spend_today_usd": 0.0,
+        "status": "ok",
+        "threshold_critical_pct": 95.0,
+        "threshold_warning_pct": 80.0,
+        "tokens_in_today": 0,
+        "tokens_out_today": 0,
+        "used_pct": null,
+        "used_usd": 0.0,
+        "walls_in_window": 0
+      },
+      "peer_b": {
+        "budget_usd": 10.0,
+        "burn_rate_per_hour": 0.0,
+        "last_call_ts": "2026-06-10T12:02:59.669000Z",
+        "last_updated": "2026-06-18T00:02:35.421375Z",
+        "name": "peer_b",
+        "period": "monthly",
+        "period_end": null,
+        "period_start": null,
+        "projected_wall_at": null,
+        "provider": "moonshot",
+        "spend_today_usd": 0.0,
+        "status": "ok",
+        "threshold_critical_pct": 95.0,
+        "threshold_warning_pct": 80.0,
+        "tokens_in_today": 0,
+        "tokens_out_today": 0,
+        "used_pct": null,
+        "used_usd": 4.999e-05,
+        "walls_in_window": 0
+      },
+      "pro_1": {
+        "budget_usd": null,
+        "burn_rate_per_hour": null,
+        "last_call_ts": null,
+        "last_updated": null,
+        "name": "pro_1",
+        "period": "weekly",
+        "period_end": null,
+        "period_start": null,
+        "projected_wall_at": null,
+        "provider": "anthropic",
+        "spend_today_usd": 0.0,
+        "status": "ok",
+        "threshold_critical_pct": 95.0,
+        "threshold_warning_pct": 80.0,
+        "tokens_in_today": 0,
+        "tokens_out_today": 0,
+        "used_pct": null,
+        "used_usd": null,
+        "walls_in_window": 0
+      },
+      "pro_2": {
+        "budget_usd": null,
+        "burn_rate_per_hour": null,
+        "last_call_ts": null,
+        "last_updated": null,
+        "name": "pro_2",
+        "period": "weekly",
+        "period_end": null,
+        "period_start": null,
+        "projected_wall_at": null,
+        "provider": "anthropic",
+        "spend_today_usd": 0.0,
+        "status": "ok",
+        "threshold_critical_pct": 95.0,
+        "threshold_warning_pct": 80.0,
+        "tokens_in_today": 0,
+        "tokens_out_today": 0,
+        "used_pct": null,
+        "used_usd": null,
+        "walls_in_window": 0
+      },
+      "pro_3": {
+        "budget_usd": null,
+        "burn_rate_per_hour": null,
+        "last_call_ts": null,
+        "last_updated": null,
+        "name": "pro_3",
+        "period": "weekly",
+        "period_end": null,
+        "period_start": null,
+        "projected_wall_at": null,
+        "provider": "anthropic",
+        "spend_today_usd": 0.0,
+        "status": "ok",
+        "threshold_critical_pct": 95.0,
+        "threshold_warning_pct": 80.0,
+        "tokens_in_today": 0,
+        "tokens_out_today": 0,
+        "used_pct": null,
+        "used_usd": null,
+        "walls_in_window": 0
+      }
+    }
+  },
+  "resources": {
+    "cpu": {
+      "load_avg_15m": 0.0,
+      "load_avg_1m": 0.0,
+      "load_avg_5m": 0.0,
+      "updated_at": null
+    },
+    "ram": {
+      "cached_mb": 0,
+      "free_mb": 98304,
+      "page_cache_models": [],
+      "swap_used_mb": 0,
+      "total_mb": 98304,
+      "updated_at": null,
+      "used_mb": 0
+    },
+    "vram": {
+      "baseline_target_pct": 80.0,
+      "free_mb": 11668,
+      "oom_risk": "low",
+      "total_mb": 24576,
+      "updated_at": "2026-06-18T00:03:08.286589Z",
+      "used_by_tier": {
+        "driver_display": 512,
+        "other": 552,
+        "t1": 11582,
+        "t2": 0,
+        "t3": 0,
+        "t4": 0,
+        "t5": 0,
+        "t6": 0
+      },
+      "used_mb": 12450
+    }
+  },
+  "schedule": {
+    "collisions": [],
+    "cron_entries": [
+      {
+        "command": "/home/operator/bin/pg-backup",
+        "log_path": "/home/operator/backups/postgres/backup.log",
+        "name": "pg-backup",
+        "next_run": "2026-06-18T06:00:00Z",
+        "schedule": "0 2 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/bin/news-ingest",
+        "log_path": "/home/operator/projects/news-pipeline/outputs/ingestion.log",
+        "name": "news-ingest",
+        "next_run": "2026-06-18T00:30:00Z",
+        "schedule": "*/30 * * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/bin/news-synth",
+        "log_path": "/home/operator/logs/news-synth.log",
+        "name": "news-synth",
+        "next_run": "2026-06-18T09:15:00Z",
+        "schedule": "15 5 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/bin/news-sync",
+        "log_path": "/home/operator/logs/news-sync.log",
+        "name": "news-sync",
+        "next_run": "2026-06-18T09:30:00Z",
+        "schedule": "30 5 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/bin/news-compile",
+        "log_path": "/home/operator/logs/news-compile.log",
+        "name": "news-compile",
+        "next_run": "2026-06-18T10:00:00Z",
+        "schedule": "0 6 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/monarch-stack/evercore_profile_drift_check.sh",
+        "log_path": "/home/operator/.local/state/loki/evercore_profile_drift.log",
+        "name": "evercore_profile_drift_check.sh",
+        "next_run": "2026-06-18T07:00:00Z",
+        "schedule": "0 3 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/monarch-stack/evercore_mongo_backup.sh",
+        "log_path": "/home/operator/backups/evercore-mongo/.backup.log",
+        "name": "evercore_mongo_backup.sh",
+        "next_run": "2026-06-18T07:30:00Z",
+        "schedule": "30 3 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/monarch-stack/hermes_backup.sh",
+        "log_path": "/home/operator/backups/hermes/.backup.log",
+        "name": "hermes_backup.sh",
+        "next_run": "2026-06-18T07:45:00Z",
+        "schedule": "45 3 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/monarch-stack/doctrine_lint.py",
+        "log_path": "/home/operator/.local/state/loki/doctrine_lint.log",
+        "name": "doctrine_lint.py",
+        "next_run": "2026-06-18T07:15:00Z",
+        "schedule": "15 3 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/monarch-stack/l1_snapshot_pg.py",
+        "log_path": "/home/operator/backups/l1-redis/.snapshot.log",
+        "name": "l1_snapshot_pg.py",
+        "next_run": "2026-06-18T08:00:00Z",
+        "schedule": "0 4 * * *",
+        "source": "crontab"
+      },
+      {
+        "command": "/home/operator/venv/inference/bin/python3 /home/operator/monarch-stack/curated_gc_proposer.py --scan",
+        "log_path": "/home/operator/monarch-stack/logs/curated_gc.log",
+        "name": "python3",
+        "next_run": "2026-06-21T07:50:00Z",
+        "schedule": "50 3 * * 0",
+        "source": "crontab"
+      }
+    ],
+    "cron_updated_at": "2026-06-18T00:02:29.561894Z",
+    "forecast_window_hours": 24,
+    "generated_at": "2026-06-17T05:22:24.888700",
+    "missed_runs_24h": [],
+    "stale_entries": [],
+    "upcoming": [],
+    "upcoming_60min": [
+      {
+        "name": "news-ingest",
+        "next_run": "2026-06-18T00:30:00Z"
+      }
+    ]
+  },
+  "schema_version": "0.1.0",
+  "tiers": {
+    "t1": {
+      "config": {
+        "active_lora": null,
+        "burst_only": false,
+        "context_size": 24576,
+        "cpu_only": false,
+        "enabled": true,
+        "engine": "llama-server",
+        "expert_offload_pct": 0,
+        "model": "Qwen3.6-27B",
+        "parallelism_np": 1,
+        "port": 8080,
+        "quant": "UD-Q4_K_XL",
+        "tier_id": "t1"
+      },
+      "performance": {
+        "completions_in_window": 0,
+        "errors_in_window": 0,
+        "prompt_eval_tok_per_sec": null,
+        "tok_per_sec_baseline": null,
+        "tok_per_sec_recent": null
+      },
+      "resources": {
+        "cpu_percent_avg_60s": 0.0,
+        "page_cache_mb": 0,
+        "ram_resident_mb": 0,
+        "vram_kv_cache_mb": 0,
+        "vram_used_mb": 11582
+      },
+      "runtime": {
+        "cpu_pct": 0.2,
+        "health_status": "ok",
+        "last_health_check": "2026-06-18T00:02:55.055991Z",
+        "last_restart_ts": "2026-06-17T05:51:25.430965Z",
+        "offload_ngl": null,
+        "offloaded": false,
+        "pid": 1238719,
+        "restart_count_24h": 2,
+        "rss_mb": 7603,
+        "state": "active",
+        "uptime_sec": 25114
+      }
+    },
+    "t2": {
+      "config": {
+        "active_lora": null,
+        "burst_only": true,
+        "context_size": 16384,
+        "cpu_only": false,
+        "enabled": true,
+        "engine": "llama-server",
+        "expert_offload_pct": 0,
+        "model": "Qwen3.6-27B",
+        "parallelism_np": 1,
+        "port": 8083,
+        "quant": "UD-Q4_K_XL",
+        "tier_id": "t2"
+      },
+      "performance": {
+        "completions_in_window": 0,
+        "errors_in_window": 0,
+        "prompt_eval_tok_per_sec": null,
+        "tok_per_sec_baseline": null,
+        "tok_per_sec_recent": null
+      },
+      "resources": {
+        "cpu_percent_avg_60s": 0.0,
+        "page_cache_mb": 0,
+        "ram_resident_mb": 0,
+        "vram_kv_cache_mb": 0,
+        "vram_used_mb": 0
+      },
+      "runtime": {
+        "cpu_pct": 0.0,
+        "health_status": "idle",
+        "last_health_check": "2026-06-18T00:02:55.055991Z",
+        "last_restart_ts": "2026-06-17T05:46:25.350640Z",
+        "offload_ngl": null,
+        "offloaded": false,
+        "pid": null,
+        "restart_count_24h": 1,
+        "rss_mb": 0,
+        "state": "stopped",
+        "uptime_sec": null
+      }
+    },
+    "t3": {
+      "config": {
+        "active_lora": null,
+        "burst_only": false,
+        "context_size": 8192,
+        "cpu_only": true,
+        "enabled": true,
+        "engine": "llama-server",
+        "expert_offload_pct": 0,
+        "model": "Qwen3.6-27B",
+        "parallelism_np": 1,
+        "port": 8084,
+        "quant": "UD-Q4_K_XL",
+        "tier_id": "t3"
+      },
+      "performance": {
+        "completions_in_window": 0,
+        "errors_in_window": 0,
+        "prompt_eval_tok_per_sec": null,
+        "tok_per_sec_baseline": null,
+        "tok_per_sec_recent": null
+      },
+      "resources": {
+        "cpu_percent_avg_60s": 0.0,
+        "page_cache_mb": 0,
+        "ram_resident_mb": 0,
+        "vram_kv_cache_mb": 0,
+        "vram_used_mb": 0
+      },
+      "runtime": {
+        "cpu_pct": 0.1,
+        "health_status": "ok",
+        "last_health_check": "2026-06-18T00:02:55.055991Z",
+        "last_restart_ts": null,
+        "offload_ngl": null,
+        "offloaded": false,
+        "pid": 2401924,
+        "restart_count_24h": 0,
+        "rss_mb": 26732,
+        "state": "active",
+        "uptime_sec": 1618179
+      }
+    },
+    "t4": {
+      "config": {
+        "active_lora": null,
+        "burst_only": false,
+        "context_size": 16384,
+        "cpu_only": true,
+        "enabled": true,
+        "engine": "llama-server",
+        "expert_offload_pct": 0,
+        "model": "Phi-4-mini",
+        "parallelism_np": 4,
+        "port": 8002,
+        "quant": "Q4_K_M",
+        "tier_id": "t4"
+      },
+      "performance": {
+        "completions_in_window": 0,
+        "errors_in_window": 0,
+        "prompt_eval_tok_per_sec": null,
+        "tok_per_sec_baseline": null,
+        "tok_per_sec_recent": null
+      },
+      "resources": {
+        "cpu_percent_avg_60s": 0.0,
+        "page_cache_mb": 0,
+        "ram_resident_mb": 0,
+        "vram_kv_cache_mb": 0,
+        "vram_used_mb": 0
+      },
+      "runtime": {
+        "cpu_pct": 0.0,
+        "health_status": "ok",
+        "last_health_check": "2026-06-18T00:02:55.055991Z",
+        "last_restart_ts": null,
+        "offload_ngl": null,
+        "offloaded": false,
+        "pid": 757260,
+        "restart_count_24h": 0,
+        "rss_mb": 5883,
+        "state": "active",
+        "uptime_sec": 83758
+      }
+    },
+    "t5": {
+      "config": {
+        "active_lora": null,
+        "burst_only": false,
+        "context_size": 8192,
+        "cpu_only": true,
+        "enabled": true,
+        "engine": "llama-server",
+        "expert_offload_pct": 0,
+        "model": "Qwen3-1.7B",
+        "parallelism_np": 1,
+        "port": 8085,
+        "quant": "Q5_K_M",
+        "tier_id": "t5"
+      },
+      "performance": {
+        "completions_in_window": 0,
+        "errors_in_window": 0,
+        "prompt_eval_tok_per_sec": null,
+        "tok_per_sec_baseline": null,
+        "tok_per_sec_recent": null
+      },
+      "resources": {
+        "cpu_percent_avg_60s": 0.0,
+        "page_cache_mb": 0,
+        "ram_resident_mb": 0,
+        "vram_kv_cache_mb": 0,
+        "vram_used_mb": 0
+      },
+      "runtime": {
+        "cpu_pct": 0.0,
+        "health_status": "ok",
+        "last_health_check": "2026-06-18T00:02:55.055991Z",
+        "last_restart_ts": null,
+        "offload_ngl": null,
+        "offloaded": false,
+        "pid": 753476,
+        "restart_count_24h": 0,
+        "rss_mb": 10011,
+        "state": "active",
+        "uptime_sec": 646075
+      }
+    },
+    "t6": {
+      "config": {
+        "active_lora": null,
+        "burst_only": false,
+        "context_size": 65536,
+        "cpu_only": false,
+        "enabled": false,
+        "engine": "llama-server",
+        "expert_offload_pct": 35,
+        "model": "Qwen3.6-35B-A3B",
+        "parallelism_np": 1,
+        "port": 8086,
+        "quant": "UD-Q4_K_XL",
+        "tier_id": "t6"
+      },
+      "performance": {
+        "completions_in_window": 0,
+        "errors_in_window": 0,
+        "prompt_eval_tok_per_sec": null,
+        "tok_per_sec_baseline": null,
+        "tok_per_sec_recent": null
+      },
+      "resources": {
+        "cpu_percent_avg_60s": 0.0,
+        "page_cache_mb": 0,
+        "ram_resident_mb": 0,
+        "vram_kv_cache_mb": 0,
+        "vram_used_mb": 0
+      },
+      "runtime": {
+        "cpu_pct": 0.0,
+        "health_status": "unknown",
+        "last_health_check": null,
+        "last_restart_ts": null,
+        "offload_ngl": null,
+        "offloaded": false,
+        "pid": null,
+        "restart_count_24h": 0,
+        "rss_mb": 0,
+        "state": "offline",
+        "uptime_sec": null
+      }
+    }
+  },
+  "workloads": {
+    "active": [],
+    "completed": [],
+    "completed_retention_hours": 168,
+    "pending": []
+  }
+}
