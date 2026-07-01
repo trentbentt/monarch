@@ -1,0 +1,8 @@
+/* Request Routing card — the route-* flow classes are shared (shell.css); this
+   adds only the in-card spacing and the LoRA footer. */
+.route-loras {
+  display: flex; align-items: baseline; gap: var(--s2);
+  margin-top: var(--s3); padding-top: var(--s3);
+  border-top: 1px solid var(--hairline); font-size: 12px; color: var(--text-primary);
+}
+.route-loras-k { flex: none; }

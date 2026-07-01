@@ -1,0 +1,49 @@
+/* Ported from neuro-portfolio components/overlays/EndingOverlay.tsx
+   (Tailwind → plain CSS). The original final scene — restored verbatim. */
+
+.ending-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ending-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 1.5rem;
+}
+
+.ending-name {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: clamp(3rem, 7vw, 6.5rem);
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  margin: 0 0 0.25rem;
+  text-shadow: 0 0 40px rgba(4, 4, 15, 0.98), 0 0 80px rgba(0, 212, 255, 0.12);
+}
+
+.ending-subtitle {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #00d4ff;
+  margin: 0 0 2.25rem;
+}
+
+.ending-cta-wrap {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+
+.ending-cta {
+  pointer-events: auto;
+  opacity: 0;
+}

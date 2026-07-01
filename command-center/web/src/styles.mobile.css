@@ -1,0 +1,187 @@
+/* ============================================================================
+   iPhone-tailored mobile pass.
+
+   Imported LAST (after shell.css / deepdive.css) so it overrides the desktop
+   shell. Built and tuned for the iPhone 14 home-screen PWA: 390×844pt logical,
+   Dynamic Island/notch + home indicator, black-translucent status bar, and a
+   coarse (touch) pointer with no hover.
+
+   Two independent axes — deliberately kept separate:
+     • viewport width  (≤600px → phone-portrait layout & density)
+     • input modality  ((hover:none)+(pointer:coarse) → touch affordances)
+   A touch laptop shouldn't get the phone layout; a narrow desktop window
+   shouldn't lose its hover affordances. Everything derives from tokens.css —
+   no new palette or type.
+   ========================================================================== */
+
+/* ── Safe areas ─────────────────────────────────────────────────────────────
+   index.html sets viewport-fit=cover + black-translucent status bar, so content
+   paints UNDER the Dynamic Island/notch and the home indicator. Pad the real
+   scroll/edge containers by the device insets (max() keeps a sane floor when an
+   inset is 0, e.g. landscape or non-notch). */
+@supports (padding: max(0px)) {
+  @media (max-width: 600px) {
+    .console-main {
+      padding-left:   max(var(--s4), env(safe-area-inset-left));
+      padding-right:  max(var(--s4), env(safe-area-inset-right));
+      padding-bottom: max(var(--s6), env(safe-area-inset-bottom));
+    }
+    .rail {
+      padding-top:   max(var(--s3), env(safe-area-inset-top));
+      padding-left:  max(var(--s4), env(safe-area-inset-left));
+      padding-right: max(var(--s4), env(safe-area-inset-right));
+    }
+    .deepdive .dv-head {
+      padding-top:   max(var(--s4), env(safe-area-inset-top));
+      padding-left:  max(var(--s4), env(safe-area-inset-left));
+      padding-right: max(var(--s4), env(safe-area-inset-right));
+    }
+    .deepdive .dv-content {
+      padding-left:   max(var(--s4), env(safe-area-inset-left));
+      padding-right:  max(var(--s4), env(safe-area-inset-right));
+      padding-bottom: max(var(--s6), env(safe-area-inset-bottom));
+    }
+    .deepdive .sup-dock,
+    .console .sup {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+}
+
+/* ── Phone-portrait layout (≤600px; iPhone 14 = 390px) ──────────────────────── */
+@media (max-width: 600px) {
+  /* Force a single column. NB: the shell's ≤1200px rule targets
+     `.console.chat-collapsed` (specificity 0-2-0), which outranks its own ≤768px
+     `.console {1fr}` (0-1-0) — so on a phone with the chat collapsed (the
+     default) the console wrongly stays two-column (248px rail + a ~142px main,
+     which squishes everything). Match that specificity here to win. */
+  .console,
+  .console.chat-collapsed {
+    grid-template-columns: 1fr;
+    min-height: 100dvh;        /* dvh tracks the dynamic toolbar; avoids 100vh overshoot */
+  }
+
+  /* Momentum scrolling + no chained rubber-band on the page edges. */
+  .console-main,
+  .deepdive .dv-body,
+  .sup-thread { -webkit-overflow-scrolling: touch; }
+  .console-main { overscroll-behavior-y: contain; }
+
+  /* Tighten the desktop paddings so a 390px column breathes without waste. */
+  .console-main { padding-top: var(--s3); gap: var(--s4); }
+
+  /* Brand rail: compact top bar. Keep brand on one row; the domain index becomes
+     a WRAPPING set of status chips rather than a tall vertical list. Wrapping
+     (not overflow-x scroll) is deliberate: a nested flex scroll-strip isn't
+     reliably clipped, and any horizontal overflow here expands the iOS layout
+     viewport, which then defeats the width media queries (feedback loop). Chips
+     that wrap can never overflow. */
+  .rail { gap: var(--s2); padding-bottom: var(--s2); }
+  /* Both the Domains index and the Explore group (Codebase Map) collapse to
+     wrapping chip rows. rail-explore's <ul> is otherwise an unstyled default
+     list — list-style:none kills its stray disc bullet. */
+  .rail-nav,
+  .rail-explore { flex-basis: 100%; min-width: 0; }
+  .rail-nav-head { display: none; }
+  .rail-nav ul,
+  .rail-explore ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+  .rail-explore ul { display: flex; }
+  .rail-link {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100%;
+    white-space: nowrap;
+    border-color: var(--hairline);
+    background: var(--panel-2);
+  }
+  .rail-link-label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+  .rail-link-sum { display: none; }   /* summaries don't fit a chip — dot+label carry status */
+
+  /* Connection read-out on its own full-width row: conn left, pid right, with a
+     real gap (otherwise "live"/"pid" collide when the foot shrinks to content). */
+  .rail-foot { flex-basis: 100%; gap: var(--s3); }
+
+  /* Footer reads as two stacked lines rather than a cramped justified row. */
+  .foot { flex-direction: column; gap: var(--s1); }
+
+  /* Control pairing: the desktop row (input | Pair | session-checkbox) crams to
+     tall slivers + one-word-per-line on a phone. Stack it: full-width input,
+     full-width Pair, then the session toggle as a normal checkbox+label row. */
+  .control-pair { flex-direction: column; align-items: stretch; gap: var(--s2); }
+  .control-pair .docs-input,
+  .control-pair .docs-btn { width: 100%; }
+  .control-session-only { display: flex; align-items: flex-start; gap: var(--s2); line-height: 1.4; }
+  .control-session-only input { flex: none; margin-top: 3px; }
+
+  /* Inputs at <16px make iOS auto-zoom on focus; pin everything interactive to
+     16px on the phone so focus never punches the layout. */
+  .sup-input,
+  input,
+  textarea,
+  select { font-size: 16px; }
+}
+
+/* ── Deep-dive: stack the docked supervisor below content ────────────────────
+   The desktop body is `content | 420px supervisor`. On a phone that fixed dock
+   overflows the 390px viewport, so collapse to one scrolling column: content
+   first, the scoped supervisor stacked beneath with usable height. */
+@media (max-width: 600px) {
+  .deepdive { height: 100dvh; }
+  .dv-head { gap: var(--s2); padding-left: var(--s4); padding-right: var(--s4); }
+  .dv-title { font-size: 19px; }
+
+  .dv-body {
+    grid-template-columns: 1fr;          /* single column */
+    overflow-y: auto;                    /* the body becomes the scroller */
+  }
+  .dv-content { overflow: visible; padding: var(--s4); }   /* flows; body scrolls */
+  .dv-dock { border-top: 1px solid var(--hairline); }
+  .sup-dock { border-left: none; min-height: 78dvh; }      /* concrete height → its flex/scroll work */
+
+  /* Auto-fit grids drop their desktop minimums so cards never force h-scroll. */
+  .dpv-items { grid-template-columns: 1fr; }
+  .dpv-facts { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+}
+
+/* ── Touch affordances (no hover, coarse pointer) ────────────────────────────
+   Anything the desktop reveals on :hover must be permanently visible on touch,
+   and every interactive control needs a ≥44pt target (Apple HIG). */
+@media (hover: none) and (pointer: coarse) {
+  /* The expand button is the ONLY way into a deep-dive — on desktop it fades in
+     on cell hover, which never fires on touch. Make it always visible and a
+     proper finger target. */
+  .bento-expand {
+    opacity: 1;
+    width: 40px; height: 40px;
+    font-size: 16px;
+    background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+    border-color: var(--hairline-strong);
+  }
+
+  /* Kill the hover-lift transform (it would stick after a tap) and the
+     cursor-tracking border (pointless without a cursor). */
+  .bento-cell:hover .ic-card { transform: none; box-shadow: none; }
+  .cursor-border::before { display: none; }
+
+  /* Comfortable finger targets across the interactive surface. */
+  .rail-link { padding-top: 11px; padding-bottom: 11px; }
+  .dv-back { padding: 10px 14px; }
+  .dv-refresh,
+  .sup-collapse { width: 40px; height: 40px; }
+  .dv-tab { padding: 11px 14px; }
+  .sup-send { padding: 12px 22px; }
+  .sup-suggest-btn { padding: 13px 14px; }
+  .sup-deep-box { width: 18px; height: 18px; }
+
+  /* No grey flash on tap. */
+  a, button, .rail-link, .bento-expand, .dv-tab, .sup-suggest-btn {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

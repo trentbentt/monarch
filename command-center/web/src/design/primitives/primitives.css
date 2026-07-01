@@ -1,0 +1,97 @@
+/* Instrument-console primitives. Derives entirely from tokens.css. */
+
+/* --- StatusDot ----------------------------------------------------------- */
+.ic-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--st, var(--unknown)); display: inline-block; flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--st, var(--unknown)) 14%, transparent); }
+.ic-dot-pulse { animation: ic-pulse 1.6s ease-in-out infinite; }
+@keyframes ic-pulse { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--st) 14%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--st) 6%, transparent); } }
+
+/* --- Card ---------------------------------------------------------------- */
+.ic-card {
+  position: relative;
+  background: var(--panel);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  padding: var(--s4);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(232, 232, 248, 0.04);
+}
+.ic-rail { position: absolute; top: 0; left: 0; right: 0; height: var(--rail); background: transparent; }
+.ic-card.st-warn .ic-rail { background: linear-gradient(90deg, var(--caution), transparent 70%); }
+.ic-card.st-crit .ic-rail { background: linear-gradient(90deg, var(--alert), transparent 70%); }
+.ic-card.ic-accent .ic-rail { background: linear-gradient(90deg, var(--brass), transparent 75%); }
+.ic-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
+.ic-head-l { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ic-head-r { display: flex; align-items: center; gap: var(--s2); flex: none; }
+.ic-body { display: block; }
+
+/* --- Gauge (signature) --------------------------------------------------- */
+.ic-gauge { position: relative; aspect-ratio: 1; display: grid; place-items: center; }
+.ic-gauge-svg { display: block; transform: rotate(0deg); }
+.ic-gauge-track { stroke: var(--faint); opacity: 0.35; }
+/* The VRAM dial is DATA viz -> neural-orange (the neuro data palette), not the
+   cyan UI accent. Warn/crit shift up the colormap toward hot. */
+.ic-gauge-fill { stroke: var(--neural-orange); transition: stroke-dasharray 0.5s ease; filter: drop-shadow(0 0 7px rgba(255, 107, 26, 0.55)); }
+.ic-gauge.st-warn .ic-gauge-fill { stroke: var(--neural-amber); filter: drop-shadow(0 0 7px rgba(255, 184, 0, 0.5)); }
+.ic-gauge.st-crit .ic-gauge-fill { stroke: var(--neural-hot); filter: drop-shadow(0 0 9px rgba(255, 220, 80, 0.6)); }
+/* Accent gauge (the VRAM hero) reads cyan — the substrate's most-active signal.
+   warn/crit have higher specificity, so real danger still recolours it. */
+.ic-gauge-accent .ic-gauge-fill { stroke: var(--glow-primary); filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.55)); }
+.ic-gauge-accent.st-ok .t-metric-lg,
+.ic-gauge-accent.st-unknown .t-metric-lg { color: var(--glow-primary); }
+.ic-gauge-baseline { stroke: var(--text-primary); stroke-width: 2; opacity: 0.6; }
+.ic-gauge-well { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.ic-gauge-pct { font-size: 14px; color: var(--muted); margin-left: 1px; }
+.ic-gauge-label { margin-top: 2px; }
+
+/* --- Meter --------------------------------------------------------------- */
+.ic-meter { display: flex; flex-direction: column; gap: 4px; }
+.ic-meter-head { display: flex; justify-content: space-between; align-items: baseline; }
+.ic-meter-track { position: relative; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--faint) 40%, transparent); overflow: hidden; }
+.ic-meter-fill { height: 100%; border-radius: 3px; background: var(--st, var(--vital)); transition: width 0.4s ease; }
+.ic-meter-thresh { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--frost); opacity: 0.5; transform: translateX(-1px); }
+
+/* --- StackBar ------------------------------------------------------------ */
+.ic-stack { display: flex; flex-direction: column; gap: var(--s2); }
+.ic-stack-track { display: flex; height: 10px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--faint) 30%, transparent); }
+.ic-stack-seg { height: 100%; transition: width 0.4s ease; }
+.ic-stack-seg + .ic-stack-seg { border-left: 1px solid var(--ink); }
+.ic-stack-legend { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); }
+.ic-stack-key { display: inline-flex; align-items: center; gap: 5px; }
+.ic-stack-swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+/* --- Sparkline ----------------------------------------------------------- */
+.ic-spark-line { stroke: var(--st, var(--brass)); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.ic-spark-area { fill: var(--st, var(--brass)); opacity: 0.10; }
+.ic-spark.st-unknown .ic-spark-line { stroke: var(--muted); }
+
+/* --- Metric -------------------------------------------------------------- */
+.ic-metric { display: flex; flex-direction: column; gap: 2px; }
+.ic-metric-unit { font-size: 0.55em; color: var(--muted); }
+.ic-metric-label { margin-top: 2px; }
+.ic-metric.st-warn .t-metric-lg, .ic-metric.st-warn .t-metric-sm { color: var(--caution); }
+.ic-metric.st-crit .t-metric-lg, .ic-metric.st-crit .t-metric-sm { color: var(--alert); }
+
+/* --- Cell ---------------------------------------------------------------- */
+.ic-cell { text-align: left; background: var(--panel-2); border: 1px solid var(--hairline); border-radius: var(--r-sm); padding: var(--s2) var(--s3); display: flex; flex-direction: column; gap: 3px; width: 100%; font: inherit; color: inherit; }
+button.ic-cell { cursor: pointer; transition: border-color 0.2s ease; }
+button.ic-cell:hover { border-color: var(--hairline-strong); }
+.ic-cell-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.ic-cell-label { font-family: var(--font-display); font-size: 12px; font-weight: 600; color: var(--frost); }
+.ic-cell-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st, var(--unknown)); flex: none; }
+.ic-cell-value { font-size: 15px; color: var(--frost); }
+.ic-cell-sub { color: var(--muted); }
+
+/* --- MiniTimeline -------------------------------------------------------- */
+.ic-tl-window { margin-bottom: var(--s2); }
+.ic-tl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ic-tl-item { position: relative; display: grid; grid-template-columns: auto 52px 1fr; align-items: baseline; gap: var(--s2); padding: 5px 0 5px var(--s4); border-left: 1px solid var(--hairline); }
+.ic-tl-node { position: absolute; left: -4px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--st, var(--unknown)); box-shadow: 0 0 0 3px var(--panel); }
+.ic-tl-t { color: var(--muted); font-size: 11px; }
+.ic-tl-label { color: var(--frost); font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.ic-tl-sub { grid-column: 3; color: var(--muted); }
+.ic-tl-empty { padding: var(--s3) 0; }
+
+/* keyboard focus — brass, deliberate */
+.ic-card :focus-visible, button.ic-cell:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: var(--r-sm); }

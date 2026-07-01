@@ -1,0 +1,83 @@
+/* Command Center design tokens — neuro skin.
+   Adopts the neuro-portfolio system: deep-space ground, cyan = UI, neural-orange
+   = DATA viz only, Cormorant/DM Sans/DM Mono. Legacy var NAMES are kept and
+   remapped so existing components restyle without rewrites. */
+:root {
+  /* neuro canonical */
+  --background: #04040F;
+  --surface:    #0A0A1F;
+  --surface-2:  #10102A;
+  --neuro-border: #1E1E42;
+
+  --glow-primary:   #00D4FF;   /* cyan — UI only */
+  --glow-secondary: #7B2FFF;   /* violet */
+
+  --neural-orange: #FF6B1A;    /* DATA viz only */
+  --neural-amber:  #FFB800;
+  --neural-hot:    #FFDC50;
+
+  --text-primary: #E8E8F8;
+  --text-muted:   #6B6B9A;
+  --text-mono:    #A0A8C0;
+
+  /* ---- legacy Command Center aliases, remapped to neuro ---- */
+  --ink: var(--background);
+  /* near-solid panels — sit cleanly over the dim lightning/aurora ground so the
+     backdrop never bleeds through enough to distract from the data */
+  --panel:   rgba(10, 11, 28, 0.94);
+  --panel-2: rgba(17, 18, 42, 0.97);
+  --hairline: rgba(0, 212, 255, 0.10);
+  --hairline-strong: rgba(0, 212, 255, 0.22);
+  --frost: var(--text-primary);
+  --muted: var(--text-muted);
+  --faint: #3C4163;
+
+  --brass: var(--glow-primary);             /* signature accent = cyan UI glow */
+  --brass-dim: #0A5E73;
+  --brass-glow: rgba(0, 212, 255, 0.22);
+
+  --vital: #00FF88;            /* status OK (neuro success) */
+  --caution: var(--neural-amber);  /* status warn */
+  --alert: #FF4455;            /* status crit (neuro error) */
+  --unknown: #5A6678;
+
+  /* type — the Monarch voice: Fraunces (elegant serif display) over Geist
+     (high-grade-tech body) + Geist Mono (instrument readouts). */
+  --font-display: "Fraunces Variable", "Fraunces", Georgia, serif;
+  --font-body: "Geist Sans", "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* spacing (4px grid) */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+
+  /* shape */
+  --r: 12px;
+  --r-sm: 8px;
+  --rail: 2px;
+}
+
+/* status color resolver: set --st on a node, children read var(--st). */
+.st-ok { --st: var(--vital); }
+.st-warn { --st: var(--caution); }
+.st-crit { --st: var(--alert); }
+.st-unknown { --st: var(--unknown); }
+
+/* typographic helpers — eyebrows/data in DM Mono, titles in Cormorant serif */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); font-weight: 500;
+}
+.t-title {
+  font-family: var(--font-display);
+  font-size: 19px; font-weight: 600; color: var(--frost);
+  letter-spacing: 0.01em; line-height: 1.1;
+}
+.t-metric-lg { font-family: var(--font-mono); font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--frost); line-height: 1; }
+.t-metric-sm { font-family: var(--font-mono); font-size: 18px; font-variant-numeric: tabular-nums; color: var(--frost); }
+.t-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.t-caption { font-size: 12px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

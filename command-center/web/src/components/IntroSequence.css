@@ -1,0 +1,25 @@
+/* Full-screen entrance overlay. The brain scene + restored neuro-portfolio
+   layers own everything; no text, no manual scroll. Children carry their own
+   fixed positioning + z-index (aurora 1, canvas 0, ground 5, ending 10,
+   loader 50), mirroring the original page composition. */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #04040f;
+  opacity: 1;
+  /* Nothing inside is user-scrollable — the sequence is fully automated. */
+  overflow: hidden;
+  touch-action: none;
+  transition: opacity 0.85s ease;
+}
+
+.intro--out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro :focus-visible {
+  outline: 2px solid #00d4ff;
+  outline-offset: 3px;
+}

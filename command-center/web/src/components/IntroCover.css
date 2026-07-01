@@ -1,0 +1,49 @@
+/* Instant opaque cover (Suspense fallback). Mirrors LoadingScreen's initial look
+   so the swap to the real loader is invisible. Lives in the main bundle. */
+.intro-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background-color: #04040f;
+}
+
+.intro-cover-ring {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 212, 255, 0.12);
+  border-top-color: #00d4ff;
+  box-shadow: 0 0 18px rgba(0, 212, 255, 0.45), inset 0 0 18px rgba(0, 212, 255, 0.06);
+  animation: intro-cover-spin 1.1s linear infinite;
+}
+
+@keyframes intro-cover-spin {
+  to { transform: rotate(360deg); }
+}
+
+.intro-cover-percent {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.2em;
+  color: #00d4ff;
+}
+
+.intro-cover-track {
+  width: 6rem;
+  height: 1px;
+  overflow: hidden;
+  background-color: rgba(0, 212, 255, 0.1);
+}
+
+.intro-cover-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background-color: #00d4ff;
+  transform: scaleX(0);
+}

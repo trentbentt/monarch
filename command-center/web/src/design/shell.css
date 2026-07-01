@@ -1,0 +1,461 @@
+/* Observatory Console — the three-zone shell that frames the redesign.
+   Derives entirely from tokens.css. Zones: rail (spine) | main (bento) | chat. */
+
+:root {
+  --rail-w: 248px;
+  --chat-w: 380px;
+  --console-pad: 22px;
+}
+
+.console {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--chat-w);
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Chat collapsed natively — the bento gets the room back. */
+.console.chat-collapsed { grid-template-columns: var(--rail-w) minmax(0, 1fr) 54px; }
+
+/* ── Ambient cyan lightning backdrop ────────────────────────────────────── */
+/* Ambient cyan lightning — full-screen, kept deliberately dim so it reads as
+   deep-background atmosphere rather than something that pulls the eye. The solid
+   foreground panels (see token alphas) sit cleanly on top. */
+.lightning-bg {
+  position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;     /* black contributes nothing; only the bolt adds light */
+  opacity: 0.22;
+}
+@media (prefers-reduced-motion: reduce) { .lightning-bg { opacity: 0.16; } }
+
+/* ── Aside rail ─────────────────────────────────────────────────────────── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  padding: var(--s5) var(--s4);
+  border-right: 1px solid var(--hairline);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 97%, transparent),
+    color-mix(in srgb, var(--background) 98%, transparent));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  overflow-y: auto;
+}
+
+.rail-brand { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s2); }
+.rail-brand-meta { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.rail-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: 0.02em; color: var(--frost); margin: 0; line-height: 1;
+}
+.rail-overall { font-size: 12px; letter-spacing: 0.04em; color: var(--st, var(--muted)); }
+
+.rail-nav { flex: 1; min-height: 0; }
+.rail-nav-head { margin-bottom: var(--s3); }
+.rail-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rail-link {
+  display: flex; align-items: center; gap: var(--s2);
+  width: 100%; padding: 7px var(--s2); border-radius: var(--r-sm);
+  background: transparent; border: 1px solid transparent;
+  color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer;
+  text-align: left; transition: background 0.15s ease, border-color 0.15s ease;
+}
+.rail-link:hover { background: var(--panel-2); border-color: var(--hairline); }
+.rail-link:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+.rail-link-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--st, var(--unknown));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st, var(--unknown)) 16%, transparent);
+}
+.rail-link.st-crit .rail-link-dot { animation: ic-pulse 1.3s ease-in-out infinite; }
+.rail-link-label { flex: 1; min-width: 0; }
+.rail-link-sum { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 86px; }
+
+.rail-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: var(--s3); border-top: 1px solid var(--hairline);
+  font-size: 12px; color: var(--muted);
+}
+.rail-conn { display: inline-flex; align-items: center; gap: 6px; text-transform: capitalize; }
+.rail-conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.conn-live .rail-conn-dot { background: var(--vital); box-shadow: 0 0 8px var(--vital); }
+.conn-polling .rail-conn-dot { background: var(--caution); }
+.conn-offline .rail-conn-dot { background: var(--alert); animation: ic-pulse 1.3s ease-in-out infinite; }
+.rail-pid { font-size: 11px; }
+
+/* ── Reactor orb (signature) ────────────────────────────────────────────── */
+/* The core reads as a cyan energy reactor (matches the lightning), not a status
+   light — overall status is carried by the rail text, conn dot, and card rails. */
+.reactor { position: relative; display: grid; place-items: center; --st: var(--glow-primary); }
+.reactor-svg { display: block; overflow: visible; }
+.reactor-ring { fill: none; stroke: var(--st, var(--unknown)); stroke-width: 0.6; opacity: 0.22; transform-origin: 50% 50%; }
+.reactor-ring-1 { animation: reactor-breathe 4.6s ease-in-out infinite; }
+.reactor-ring-2 { animation: reactor-breathe 4.6s ease-in-out infinite 0.5s; opacity: 0.16; }
+.reactor-ring-3 { animation: reactor-breathe 4.6s ease-in-out infinite 1s; opacity: 0.1; }
+.reactor-lattice line { stroke: var(--st, var(--unknown)); stroke-width: 0.4; opacity: 0.28; }
+.reactor-glow { animation: reactor-pulse 3.4s ease-in-out infinite; transform-origin: 50% 50%; }
+.reactor-core {
+  fill: var(--st, var(--unknown));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--st) 80%, transparent));
+  animation: reactor-pulse 3.4s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+.reactor.st-crit .reactor-core { animation-duration: 1.3s; }
+@keyframes reactor-breathe { 0%, 100% { transform: scale(1); opacity: var(--o, 0.2); } 50% { transform: scale(1.05); opacity: 0.05; } }
+@keyframes reactor-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: 0.78; } }
+
+/* radar ping — a ring expands from the core (r=9) outward and fades, like a
+   sweep return. Three staggered pulses read as a continuous radar. */
+.reactor-ping {
+  fill: none;
+  stroke: var(--glow-primary);
+  stroke-width: 1.1;
+  transform-origin: 50% 50%;
+  opacity: 0;
+  animation: reactor-ping 6s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+.reactor-ping-2 { animation-delay: 2s; }
+.reactor-ping-3 { animation-delay: 4s; }
+@keyframes reactor-ping {
+  0%   { transform: scale(1);   opacity: 0.9; stroke-width: 1.6; }
+  70%  { opacity: 0.12; }
+  100% { transform: scale(5.2); opacity: 0;   stroke-width: 0.4; }
+}
+
+/* ── Main column ────────────────────────────────────────────────────────── */
+.console-main {
+  overflow-y: auto;
+  padding: var(--console-pad);
+  display: flex; flex-direction: column; gap: var(--s5);
+  scrollbar-width: thin; scrollbar-color: var(--neuro-border) transparent;
+}
+.console-main::-webkit-scrollbar { width: 8px; }
+.console-main::-webkit-scrollbar-thumb { background: var(--neuro-border); border-radius: 4px; }
+
+.attention-strip { display: flex; flex-direction: column; gap: var(--s2); }
+
+/* ── Spotlight + bento ──────────────────────────────────────────────────── */
+.spotlight { position: relative; }
+.spotlight-glow {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: var(--r);
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 30%),
+    color-mix(in srgb, var(--glow-primary) 14%, transparent), transparent 60%);
+  opacity: 0.9; transition: opacity 0.3s ease;
+}
+.bento { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); }
+.bento-cell { position: relative; min-width: 0; grid-column: span 2; }
+
+/* Cursor-tracking cyan border — a conic arc on the card edge follows the pointer
+   (--rotation set per cell in RichGrid). The mask-exclude trick paints only the
+   1.5px ring, so the card surface stays clean. Adapted from the InfoCard pattern,
+   cyan-only to match the substrate's electric voice. */
+.cursor-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: calc(var(--r) + 1px);
+  padding: 1.5px;
+  background: conic-gradient(from var(--rotation, 0deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--glow-primary) 35%, transparent) 22deg,
+    var(--glow-primary) 45deg,
+    color-mix(in srgb, var(--glow-primary) 35%, transparent) 68deg,
+    transparent 90deg,
+    transparent 360deg);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+.cursor-border:hover::before { opacity: 1; }
+.bento-cell > .ic-card, .bento-cell > section { height: 100%; }
+
+/* expand affordance — hover-revealed, sits above the card frame */
+.bento-expand {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1;
+  color: var(--muted); background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  border: 1px solid var(--hairline);
+  opacity: 0; transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.bento-cell:hover .bento-expand, .bento-cell.expanded .bento-expand,
+.bento-expand:focus-visible { opacity: 1; }
+.bento-expand:hover { color: var(--glow-primary); border-color: var(--brass-glow); }
+.bento-cell.expanded { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--s3); }
+.bento-cell.expanded > .ic-card, .bento-cell.expanded > section { height: auto; }
+.bento-cell.expanded .ic-card { box-shadow: 0 10px 36px rgba(0,0,0,0.42), 0 0 0 1px var(--brass-glow) inset; }
+
+/* ── Domain detail (expanded drill-down) ────────────────────────────────── */
+.domain-detail {
+  position: relative; z-index: 1;
+  border: 1px solid var(--hairline); border-radius: var(--r);
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding: var(--s4); animation: sup-rise 0.25s ease both;
+}
+.dd-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s3); }
+.dd-status { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--st, var(--muted)); }
+.dd-counts { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s3); }
+.dd-count { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--panel-2); border: 1px solid var(--hairline); }
+.dd-count-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.dd-count-v { font-size: 16px; color: var(--frost); }
+.dd-tree { max-height: 320px; overflow: auto; font-family: var(--font-mono); font-size: 12px; scrollbar-width: thin; scrollbar-color: var(--neuro-border) transparent; }
+.dd-tree::-webkit-scrollbar { width: 7px; }
+.dd-tree::-webkit-scrollbar-thumb { background: var(--neuro-border); border-radius: 4px; }
+.dd-empty { font-family: var(--font-body); }
+.kv-row { display: flex; align-items: baseline; gap: var(--s3); padding: 2px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.kv-branch { border-bottom: none; margin-top: 4px; }
+.kv-key { color: var(--text-mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.kv-count { color: var(--faint); }
+.kv-num { color: var(--glow-primary); }
+.kv-str { color: var(--text-primary); text-align: right; word-break: break-word; }
+.kv-null { color: var(--faint); }
+.kv-bool.kv-true { color: var(--vital); }
+.kv-bool.kv-false { color: var(--alert); }
+
+/* ── Supervisor collapsed rail ──────────────────────────────────────────── */
+.sup-rail {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s3);
+  padding: var(--s4) 0; cursor: pointer; font: inherit;
+  border-left: 1px solid var(--hairline); color: var(--text-primary);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 97%, transparent),
+    color-mix(in srgb, var(--background) 98%, transparent));
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease;
+}
+.sup-rail:hover { background: var(--panel-2); }
+.sup-rail:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+.sup-rail-icon { font-size: 20px; color: var(--glow-primary); filter: drop-shadow(0 0 6px var(--brass-glow)); }
+.sup-rail-label { writing-mode: vertical-rl; text-orientation: mixed; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.22em; color: var(--muted); }
+.sup-rail-count { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--brass-glow); color: var(--glow-primary); border: 1px solid var(--brass-glow); }
+.sup-rail-dot { margin-top: auto; width: 9px; height: 9px; border-radius: 50%; background: var(--st, var(--unknown)); box-shadow: 0 0 10px var(--st, transparent); }
+
+.sup-head-r { display: flex; align-items: center; gap: var(--s2); flex: none; }
+.sup-collapse {
+  width: 26px; height: 26px; display: grid; place-items: center; cursor: pointer;
+  border-radius: 7px; font-size: 13px; color: var(--muted);
+  background: var(--panel-2); border: 1px solid var(--hairline); transition: color 0.15s ease, border-color 0.15s ease;
+}
+.sup-collapse:hover { color: var(--glow-primary); border-color: var(--brass-glow); }
+.bento-cell .ic-card { transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
+.bento-cell:hover .ic-card { transform: translateY(-2px); border-color: var(--hairline-strong); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(232, 232, 248, 0.05); }
+
+/* Hero pairing: Vitals leads wide + tall, Engine Room beside it. */
+.bento-vitals { grid-column: span 2; grid-row: span 2; }
+.bento-tiers  { grid-column: span 2; }
+.bento-workflows, .bento-spend, .bento-memory, .bento-events,
+.bento-schedule, .bento-routing, .bento-authority, .bento-docs { grid-column: span 2; }
+
+@media (max-width: 1500px) {
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bento-cell, .bento-vitals, .bento-tiers { grid-column: span 1; }
+  .bento-vitals { grid-row: span 1; }
+}
+
+/* ── Item 11 polish: cohesive electric/classy surfaces ──────────────────── */
+/* A whisper-thin top sheen gives the cards real depth instead of reading as flat
+   AI-default panels; the cyan cursor border supplies the electric edge. */
+.ic-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--glow-primary) 6%, transparent), transparent 18%);
+  opacity: 0.7;
+}
+.ic-card { position: relative; }
+
+/* Bring the ops panels (pending, routing, queues, docs, push, control) up to the
+   same instrument frame as the bento, so the lower half stops looking templated. */
+.ops .panel {
+  margin-top: 0;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  padding: var(--s4);
+}
+.ops .panel > h2,
+.ops .panel > h3 {
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 var(--s3);
+  display: flex; align-items: center; gap: 8px;
+}
+.ops .panel > h2::before,
+.ops .panel > h3::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--glow-primary); box-shadow: 0 0 8px var(--brass-glow);
+}
+
+/* Request Routing — the request→tier pipeline, read left to right. */
+.route-lede { margin: 0 0 var(--s4); color: var(--muted); }
+.route-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--s2); margin-bottom: var(--s3); }
+.route-flow-item { display: flex; align-items: stretch; gap: var(--s2); }
+.route-hop {
+  display: flex; flex-direction: column; gap: 3px; min-width: 132px;
+  padding: 10px 12px; border-radius: var(--r-sm);
+  background: var(--panel-2); border: 1px solid var(--hairline);
+}
+.route-hop-head { display: flex; align-items: center; gap: 7px; }
+.route-hop .card-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--unknown); flex: none; }
+.route-hop.lvl-ok .card-dot { background: var(--vital); box-shadow: 0 0 6px color-mix(in srgb, var(--vital) 60%, transparent); }
+.route-hop.lvl-warn .card-dot { background: var(--caution); }
+.route-hop.lvl-crit .card-dot { background: var(--alert); animation: ic-pulse 1.3s ease-in-out infinite; }
+.route-hop-label { font-size: 13px; font-weight: 600; color: var(--frost); }
+.route-hop-sub { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.route-hop-meta { font-size: 10px; color: var(--faint); }
+.route-hop-dest {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--glow-primary) 9%, transparent), transparent 70%), var(--panel-2);
+  border-color: color-mix(in srgb, var(--glow-primary) 30%, var(--hairline));
+}
+.route-hop-dest .route-hop-label { color: var(--glow-primary); }
+.route-arrow { display: flex; align-items: center; color: var(--glow-primary); font-size: 15px; opacity: 0.7; }
+
+/* ── Operations stack ───────────────────────────────────────────────────── */
+.ops { display: flex; flex-direction: column; gap: var(--s4); }
+.ops-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); align-items: start; }
+@media (max-width: 1100px) { .ops-row { grid-template-columns: 1fr; } }
+
+.foot {
+  display: flex; justify-content: space-between; gap: var(--s4);
+  color: var(--muted); font-size: 11px; padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+
+/* ── Supervisor chat console ────────────────────────────────────────────── */
+.sup {
+  display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--hairline);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 97%, transparent),
+    color-mix(in srgb, var(--background) 98%, transparent));
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.sup-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3);
+  padding: var(--s5) var(--s4) var(--s4); border-bottom: 1px solid var(--hairline);
+}
+.sup-title { font-size: 18px; }
+.sup-status {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--hairline); background: var(--panel-2);
+}
+.sup-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--st, var(--unknown)); box-shadow: 0 0 6px var(--st, transparent); }
+
+.sup-thread {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3);
+  scrollbar-width: thin; scrollbar-color: var(--neuro-border) transparent;
+}
+.sup-thread::-webkit-scrollbar { width: 7px; }
+.sup-thread::-webkit-scrollbar-thumb { background: var(--neuro-border); border-radius: 4px; }
+
+.sup-empty { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s2); }
+.sup-empty-lede { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+.sup-empty-head { margin-top: var(--s2); }
+.sup-suggest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
+.sup-suggest-btn {
+  width: 100%; text-align: left; cursor: pointer;
+  padding: 10px 12px; border-radius: var(--r-sm); font: inherit; font-size: 13px;
+  color: var(--text-primary); background: var(--panel-2);
+  border: 1px solid var(--hairline); transition: border-color 0.15s ease, color 0.15s ease;
+}
+.sup-suggest-btn:hover:not(:disabled) { border-color: var(--brass-glow); color: var(--brass); }
+.sup-suggest-btn:disabled { opacity: 0.5; cursor: default; }
+
+.sup-msg { display: flex; flex-direction: column; gap: 4px; animation: sup-rise 0.28s ease both; }
+@keyframes sup-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sup-msg-who { display: flex; align-items: center; gap: 6px; }
+.sup-tag {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--glow-primary);
+  border: 1px solid var(--brass-glow); border-radius: 4px; padding: 0 5px;
+}
+.sup-msg-body { font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+
+.sup-user { align-items: flex-end; }
+.sup-user .sup-msg-body {
+  background: color-mix(in srgb, var(--glow-primary) 12%, var(--surface-2));
+  border: 1px solid var(--brass-glow); color: var(--frost);
+  padding: 9px 12px; border-radius: 12px 12px 2px 12px; max-width: 92%;
+}
+.sup-supervisor .sup-msg-body {
+  background: var(--panel-2); border: 1px solid var(--hairline);
+  padding: 11px 13px; border-radius: 12px 12px 12px 2px;
+  color: var(--text-primary);
+}
+.sup-system .sup-msg-body { color: var(--caution); font-style: italic; font-size: 12.5px; }
+.sup-msg-err .sup-msg-body { border-color: color-mix(in srgb, var(--alert) 40%, transparent); }
+
+.sup-thinking .sup-msg-body { display: flex; align-items: center; gap: 8px; }
+.sup-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--glow-primary);
+  display: inline-block; animation: sup-blink 1.2s infinite ease-in-out both;
+}
+.sup-dots span:nth-child(2) { animation-delay: 0.2s; }
+.sup-dots span:nth-child(3) { animation-delay: 0.4s; }
+.sup-dots em { color: var(--muted); font-style: normal; font-size: 12px; margin-left: 4px; }
+@keyframes sup-blink { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
+
+.sup-compose { padding: var(--s3) var(--s4) var(--s4); border-top: 1px solid var(--hairline); display: flex; flex-direction: column; gap: var(--s2); }
+.sup-input {
+  width: 100%; resize: none; font: inherit; font-size: 13.5px; line-height: 1.5;
+  color: var(--frost); background: var(--surface-2);
+  border: 1px solid var(--hairline); border-radius: var(--r-sm); padding: 10px 12px;
+  transition: border-color 0.15s ease;
+}
+.sup-input::placeholder { color: var(--faint); }
+.sup-input:focus { outline: none; border-color: var(--brass-glow); box-shadow: 0 0 0 3px var(--brass-glow); }
+.sup-input:disabled { opacity: 0.6; }
+.sup-compose-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+
+.sup-deep { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; }
+.sup-deep input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sup-deep-box { width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--hairline-strong); background: var(--surface-2); display: inline-grid; place-items: center; transition: all 0.15s ease; }
+.sup-deep.on { color: var(--glow-primary); }
+.sup-deep.on .sup-deep-box { background: var(--glow-primary); border-color: var(--glow-primary); box-shadow: 0 0 8px var(--brass-glow); }
+.sup-deep.on .sup-deep-box::after { content: "✓"; color: var(--background); font-size: 10px; font-weight: 700; }
+.sup-deep input:focus-visible + .sup-deep-box { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.sup-send {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 8px 20px; border-radius: var(--r-sm);
+  color: var(--background); background: var(--glow-primary);
+  border: 1px solid var(--glow-primary);
+  box-shadow: 0 0 14px var(--brass-glow); transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.sup-send:hover:not(:disabled) { transform: translateY(-1px); }
+.sup-send:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+
+/* ── Responsive: collapse to stacked panes ──────────────────────────────── */
+@media (max-width: 1200px) {
+  .console, .console.chat-collapsed { grid-template-columns: var(--rail-w) minmax(0, 1fr); height: auto; min-height: 100vh; overflow: visible; }
+  .console-main { overflow: visible; }
+  .sup { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--hairline); height: 70vh; }
+  .sup-rail { grid-column: 1 / -1; flex-direction: row; justify-content: center; gap: var(--s3);
+    padding: var(--s3); border-left: none; border-top: 1px solid var(--hairline); }
+  .sup-rail-label { writing-mode: horizontal-tb; }
+  .sup-rail-dot { margin-top: 0; margin-left: var(--s2); }
+}
+@media (max-width: 768px) {
+  .console { grid-template-columns: 1fr; }
+  .rail { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s3); border-right: none; border-bottom: 1px solid var(--hairline); }
+  .rail-brand { flex-direction: row; text-align: left; flex: 1; }
+  .rail-brand-meta { align-items: flex-start; }
+  .reactor { transform: scale(0.6); margin: -22px; }
+  .rail-nav { flex-basis: 100%; }
+  .bento { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,54 @@
+/* Ported from neuro-portfolio components/overlays/LoadingScreen.tsx
+   (Tailwind + styled-jsx → plain CSS). The real loader: a spinning cyan ring,
+   a percentage, and a thin progress bar on the #04040F world background.
+   No words. */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background-color: #04040f;
+}
+
+.loader-ring {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 212, 255, 0.12);
+  border-top-color: #00d4ff;
+  box-shadow: 0 0 18px rgba(0, 212, 255, 0.45), inset 0 0 18px rgba(0, 212, 255, 0.06);
+  animation: loader-spin 1.1s linear infinite;
+}
+
+@keyframes loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loader-percent {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.2em;
+  color: #00d4ff;
+}
+
+.loader-track {
+  width: 6rem;
+  height: 1px;
+  overflow: hidden;
+  background-color: rgba(0, 212, 255, 0.1);
+}
+
+.loader-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background-color: #00d4ff;
+  transform: scaleX(0);
+}

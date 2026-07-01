@@ -1,0 +1,24 @@
+.wf { display: flex; flex-direction: column; gap: var(--s4); }
+
+.wf-engine {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3); border-radius: var(--r-sm);
+  background: var(--panel-2); border: 1px solid var(--hairline);
+}
+.wf-engine-dot {
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  background: var(--st, var(--unknown));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--st, var(--unknown)) 14%, transparent),
+              0 0 14px color-mix(in srgb, var(--st, var(--unknown)) 60%, transparent);
+}
+.wf-engine.st-crit .wf-engine-dot { animation: ic-pulse 1.2s ease-in-out infinite; }
+.wf-engine-meta { display: flex; flex-direction: column; gap: 1px; }
+.wf-engine-state { color: var(--frost); }
+
+.wf-cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+
+.wf-detail {
+  padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--caution) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--caution) 22%, transparent);
+}

@@ -1,0 +1,7 @@
+/* Ported from neuro-portfolio components/ui/AuroraBackground.tsx.
+   aurora-pulse keyframe came from the original globals.css. */
+
+@keyframes aurora-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.65; transform: scale(1.05); }
+}
