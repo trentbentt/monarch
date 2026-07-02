@@ -1,0 +1,17 @@
+# Fires deadman.service on a 5-minute cadence — pair with a monitor check whose
+# Period=5min, Grace=5min (e.g. healthchecks.io). When check-ins stop, the monitor
+# (which is NOT on monarch) is what alerts you. See deadman.service for install.
+[Unit]
+Description=Fire the Command Center dead-man's-switch heartbeat every 5 minutes
+
+[Timer]
+# First beat shortly after boot so a reboot-recovery re-greens the check promptly.
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+# Don't fire a backlog of missed beats on resume — a gap is exactly the outage
+# signal we WANT the external monitor to have seen.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

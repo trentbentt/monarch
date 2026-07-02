@@ -55,6 +55,18 @@ def private_pem() -> str:
     ).decode("ascii")
 
 
+def private_key_b64() -> str:
+    """Raw base64url-encoded EC private scalar (32 bytes) — the form
+    pywebpush/py_vapid consume directly.
+
+    Do NOT hand pywebpush a full PKCS8 PEM *string*: py_vapid mis-parses it and
+    raises 'Could not deserialize key data', so every push fails locally before
+    it ever reaches the push service (Apple/Mozilla/FCM). See sender.send_one.
+    """
+    d = _load_or_create().private_numbers().private_value
+    return _b64url(d.to_bytes(32, "big"))
+
+
 def application_server_key() -> str:
     """Public key as base64url-encoded uncompressed EC point (65 bytes, 0x04…)."""
     pub = _load_or_create().public_key()

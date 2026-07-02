@@ -6,6 +6,7 @@ import {
   buildNotification,
   parseHHMM,
 } from "./notifyRules.js";
+import { isReachabilityAlerting } from "./reachability.js";
 
 const BASE = "https://host.example-tailnet.ts.net:8443";
 
@@ -76,6 +77,39 @@ describe("notifyRules.shouldNotify", () => {
     expect(shouldNotify({ type: "x", severity: "critical" }, prefs, night)).toBe(false);
     // Interrupt classes still fire even at 3am.
     expect(shouldNotify({ type: "security_alert" }, prefs, night)).toBe(true);
+  });
+});
+
+describe("reachability.isReachabilityAlerting", () => {
+  const T = 120_000; // 2 min threshold
+  const base = { now: 1_000_000, thresholdMs: T };
+
+  it("never alerts before we have ever connected", () => {
+    // Fresh boot still connecting: offline the whole time, but no false alarm.
+    expect(
+      isReachabilityAlerting({ ...base, everConnected: false, offlineSince: base.now - 10 * T })
+    ).toBe(false);
+  });
+
+  it("does not alert while reachable (offlineSince null)", () => {
+    expect(
+      isReachabilityAlerting({ ...base, everConnected: true, offlineSince: null })
+    ).toBe(false);
+  });
+
+  it("does not alert before the threshold elapses", () => {
+    expect(
+      isReachabilityAlerting({ ...base, everConnected: true, offlineSince: base.now - (T - 1) })
+    ).toBe(false);
+  });
+
+  it("alerts once unreachable past the threshold", () => {
+    expect(
+      isReachabilityAlerting({ ...base, everConnected: true, offlineSince: base.now - T })
+    ).toBe(true);
+    expect(
+      isReachabilityAlerting({ ...base, everConnected: true, offlineSince: base.now - 5 * T })
+    ).toBe(true);
   });
 });
 

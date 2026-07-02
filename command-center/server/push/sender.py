@@ -25,7 +25,7 @@ def send_one(subscription: dict, payload: dict) -> Tuple[bool, int]:
         webpush(
             subscription_info=subscription,
             data=json.dumps(payload),
-            vapid_private_key=vapid.private_pem(),
+            vapid_private_key=vapid.private_key_b64(),
             vapid_claims=_claims(),
             timeout=10,
         )

@@ -40,11 +40,18 @@ def _load_router_key() -> None:
     try:
         for line in config.API_KEYS_ENV.read_text().splitlines():
             line = line.strip()
-            if line.startswith("LITELLM_MASTER_KEY") or line.startswith("LITELLM_API_KEY"):
-                _, _, val = line.partition("=")
+            # The file is shell-sourced by the rest of the stack, so every entry
+            # is `export NAME=value`. Strip the `export ` prefix before matching —
+            # without this the key is never lifted and the router 401s (which the
+            # loki client surfaces, misleadingly, as "router unreachable").
+            if line.startswith("export "):
+                line = line[len("export "):].lstrip()
+            name, sep, val = line.partition("=")
+            name = name.strip()
+            if sep and name in ("LITELLM_MASTER_KEY", "LITELLM_API_KEY"):
                 val = val.strip().strip('"').strip("'")
                 if val:
-                    os.environ.setdefault(line.split("=", 1)[0].strip(), val)
+                    os.environ.setdefault(name, val)
     except OSError:
         pass  # key absent → client still tries; router may allow it
 

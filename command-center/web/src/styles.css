@@ -89,6 +89,9 @@ body {
   background: #2a230d; border: 1px solid #5a4a14; color: #f3d98a;
   padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px;
 }
+.unreachable-banner {
+  background: #2c0f0f; border-color: #7a1f1f; color: #f6b0b0; font-weight: 600;
+}
 
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 22px 0 10px; }
 
