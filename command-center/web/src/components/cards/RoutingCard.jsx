@@ -8,7 +8,7 @@ import "./RoutingCard.css";
 
 const STAGE = [
   { name: "litellm", label: "Router", sub: "picks model + tier, applies budget" },
-  { name: "validation-gate", label: "Gate", sub: "gates news briefs; fail → retry, hold" },
+  { name: "validation-gate", label: "Gate", sub: "grades news briefs (shadow); enforce ready, parked on calibration" },
   { name: "lora-dispatcher", label: "Dispatcher", sub: "loads the tier's LoRA" },
 ];
 
