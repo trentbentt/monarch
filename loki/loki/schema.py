@@ -1,6 +1,6 @@
 """
 Loki System Model — Schema v0.1
-Host: a single-box deployment — one 24 GB GPU, a modern multi-core CPU, 96 GB RAM, Linux.
+Host: monarch (RTX 3090 24GB, Ryzen 9 9900X, 96GB DDR5, Ubuntu 24.04)
 
 Eleven top-level domains:
   hardware      — static, calibrated once
@@ -592,7 +592,9 @@ MONARCH_TIERS: Dict[str, TierConfig] = {
         burst_only=True,
     ),
     "t3": TierConfig(
-        tier_id="t3", enabled=True,
+        tier_id="t3", enabled=False,  # dormant 2026-07-02 (review P4): 1 router call
+        # ever; sole consumer is lora-dispatcher and ~/loras/ has zero adapters.
+        # Revive: ~/bin/t3-up (+ flip enabled=True when adapter work returns).
         model="Qwen3.6-27B", quant="UD-Q4_K_XL",
         context_size=8192, parallelism_np=1, port=8084, cpu_only=True,
     ),
@@ -604,7 +606,9 @@ MONARCH_TIERS: Dict[str, TierConfig] = {
         # calls are short/async). Frees ~4.2 GB VRAM for T1/T2/T6. See §5.4.
     ),
     "t5": TierConfig(
-        tier_id="t5", enabled=True,
+        tier_id="t5", enabled=False,  # dormant 2026-07-02 (review P4): 133 calls
+        # all pre-06-16, no code consumers found (pre-flip grep). Revive: ~/bin/t5-up.
+        # qwen3-small router lane has no cloud fallback by design — fails loudly.
         model="Qwen3-1.7B", quant="Q5_K_M",
         context_size=8192, parallelism_np=1, port=8085, cpu_only=True,
     ),
@@ -703,12 +707,14 @@ QUOTA_ROLE_KEYS: frozenset[str] = frozenset(
 MONARCH_HEALTH_COMPONENTS = [
     {"name": "llama-server-t1",    "port": 8080},
     {"name": "llama-server-t2",    "port": 8083},
-    {"name": "llama-server-t3",    "port": 8084},
+    # llama-server-t3 (8084), llama-server-t5 (8085), lora-dispatcher (4200):
+    # removed 2026-07-02 — tiers flipped enabled=False + dispatcher stopped
+    # (review P4, dormant until first LoRA adapter lands). Same treatment as
+    # the offline-by-default T6: not health-probed while deliberately down.
+    # Re-add the entries when reviving (t3-up / t5-up / dispatcher-up).
     {"name": "llama-server-t4",    "port": 8002},
-    {"name": "llama-server-t5",    "port": 8085},
     {"name": "litellm",            "port": 4000},
     {"name": "validation-gate",    "port": 4100},
-    {"name": "lora-dispatcher",    "port": 4200},
     {"name": "n8n",                "port": 5678},
     {"name": "postgres",           "port": 5432},
     {"name": "monarch-postgres",   "port": 5433},
@@ -744,9 +750,9 @@ PORT_TO_TIER: Dict[int, str] = {cfg.port: tid for tid, cfg in MONARCH_TIERS.item
 
 # Documented VRAM baselines (MiB) from inference-up measured values
 VRAM_BASELINE: Dict[str, int] = {
-    "t1": 11500,
+    "t1": 16000,  # 2026-07-02: -ngl 40→58 (review L4-#1); measured 16,026 at 58
     "t2": 5500,
-    "t3": 500,
+    "t3": 0,      # 2026-07-02: dormant (review P4); was 500 while always-on
     "t4": 0,      # 2026-06-16: CPU-resident (CUDA_VISIBLE_DEVICES=, -ngl 0); see §5.4
     "t5": 0,
     "t6": 0,   # offline

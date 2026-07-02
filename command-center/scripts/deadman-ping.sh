@@ -55,6 +55,35 @@ if ! curl -fsS --max-time 5 -o /dev/null "$HEALTH_URL" 2>/dev/null; then
   exit 0
 fi
 
+# BACKUP FRESHNESS GATE (2026-07-02, system-review L2-#7): the Jul-1 outage
+# silently skipped a full backup day — user cron has no anacron-style catch-up
+# and nothing watched backup RECENCY (pg-backup checks integrity, not age).
+# Piggyback the alert channel that already exists: if any backup family's
+# newest artifact is older than 48h, signal /fail with the reason instead of
+# checking in, so the external monitor alerts. Same pattern as the health gate.
+# Override the roots for testing via CC_BACKUP_ROOTS (space-separated dirs).
+BACKUP_MAX_AGE_HOURS="${CC_BACKUP_MAX_AGE_HOURS:-48}"
+BACKUP_ROOTS="${CC_BACKUP_ROOTS:-$HOME/backups/hermes $HOME/backups/evercore-mongo $HOME/backups/postgres $HOME/backups/l1-redis $HOME/backups/config}"
+stale=()
+for dir in $BACKUP_ROOTS; do
+  # newest regular file anywhere under the family dir, in whole hours
+  newest=$(find "$dir" -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+  if [[ -z "$newest" ]]; then
+    stale+=("$(basename "$dir"):empty")
+    continue
+  fi
+  age_h=$(( ($(date +%s) - ${newest%.*}) / 3600 ))
+  if (( age_h > BACKUP_MAX_AGE_HOURS )); then
+    stale+=("$(basename "$dir"):${age_h}h")
+  fi
+done
+if (( ${#stale[@]} > 0 )); then
+  reason="backup freshness gate: ${stale[*]} exceed ${BACKUP_MAX_AGE_HOURS}h"
+  echo "deadman-ping: $reason — NOT checking in so the switch trips." >&2
+  curl -fsS --max-time 10 -o /dev/null --data "$reason" "${URL%/}/fail" 2>/dev/null || true
+  exit 0
+fi
+
 # Heartbeat: a healthy check-in. --retry rides out a brief blip without tripping.
 curl -fsS --max-time 10 --retry 2 -o /dev/null "$URL"
 echo "deadman-ping: checked in OK."
