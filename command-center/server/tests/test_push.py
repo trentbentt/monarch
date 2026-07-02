@@ -22,6 +22,19 @@ def test_vapid_keygen_and_app_server_key(tmp_path, monkeypatch):
     assert vapid.application_server_key() == key
 
 
+def test_private_key_b64_is_consumable_by_pyvapid(tmp_path, monkeypatch):
+    # Regression: sender must hand pywebpush the raw base64url scalar, not a PKCS8
+    # PEM string. py_vapid.Vapid.from_string is exactly what pywebpush calls; a PEM
+    # string raises "Could not deserialize key data" and every push fails locally.
+    monkeypatch.setattr(config, "PUSH_KEYS_PATH", tmp_path / "vapid.json")
+    monkeypatch.setattr(vapid, "_priv", None)
+    from py_vapid import Vapid
+    raw = vapid.private_key_b64()
+    pad = "=" * (-len(raw) % 4)
+    assert len(base64.urlsafe_b64decode(raw + pad)) == 32
+    Vapid.from_string(raw)  # must not raise
+
+
 # --- decision logic ----------------------------------------------------------
 
 _PREFS = {"overnight_window_start": "23:00", "overnight_window_end": "07:00"}

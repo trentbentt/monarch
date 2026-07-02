@@ -109,7 +109,8 @@ def _is_dataplane_clean_stop(comp_name: str, snap) -> bool:
 
 
 def _http_check(port: int, path: str, timeout: float = 3.0,
-                bearer_env: Optional[str] = None) -> tuple[bool, int]:
+                bearer_env: Optional[str] = None,
+                auth_challenge_ok: bool = False) -> tuple[bool, int]:
     url = f"http://127.0.0.1:{port}{path}"
     start = time.monotonic()
     try:
@@ -122,6 +123,15 @@ def _http_check(port: int, path: str, timeout: float = 3.0,
             ms = int((time.monotonic() - start) * 1000)
             return True, ms
     except urllib.error.HTTPError as e:
+        # An auth challenge means the service is UP and enforcing auth — for a
+        # liveness probe that is "alive". Elasticsearch gained native-realm auth
+        # 2026-07-01 (loopback-bound, security-hardening) and now answers an
+        # unauthenticated /_cluster/health with 401; a truly-down node yields
+        # connection-refused (handled below), not a 401. This preserves the
+        # pre-auth liveness semantics without wiring store credentials into Loki.
+        if auth_challenge_ok and e.code in (401, 403):
+            ms = int((time.monotonic() - start) * 1000)
+            return True, ms
         if e.code == 404 and path != "/v1/models":
             return _http_check(port, "/v1/models", timeout, bearer_env)
         ms = int((time.monotonic() - start) * 1000)
@@ -213,12 +223,14 @@ def _newest_mtime(path: str) -> Optional[datetime]:
 # its detail string always reports each sub-state (e.g. "es:ok milvus:ok ...")
 # so a partial outage is visible in `loki-q health` / `loki-q evercore`.
 # Redis is on :6380 (remapped from 6379, reserved for P1.5-6 L1 Redis).
+# 5th field: treat an HTTP auth challenge (401/403) as alive. ES enforces
+# native-realm auth as of 2026-07-01 and 401s unauthenticated liveness pings.
 _EVERCORE_SUBPROBES = [
-    ("es",     "http", 19200, "/_cluster/health"),
-    ("milvus", "http",  9091, "/healthz"),
-    ("mongo",  "tcp",  27017, None),
-    ("redis",  "tcp",   6380, None),
-    ("api",    "http",  1995, "/health"),
+    ("es",     "http", 19200, "/_cluster/health", True),
+    ("milvus", "http",  9091, "/healthz",         False),
+    ("mongo",  "tcp",  27017, None,               False),
+    ("redis",  "tcp",   6380, None,               False),
+    ("api",    "http",  1995, "/health",          False),
 ]
 
 
@@ -228,9 +240,9 @@ def _evercore_check() -> tuple[bool, int, str]:
     start = time.monotonic()
     parts: list[str] = []
     all_ok = True
-    for label, kind, port, path in _EVERCORE_SUBPROBES:
+    for label, kind, port, path, auth_ok in _EVERCORE_SUBPROBES:
         if kind == "http":
-            ok, _ = _http_check(port, path)
+            ok, _ = _http_check(port, path, auth_challenge_ok=auth_ok)
         else:
             ok, _ = _tcp_check(port)
         parts.append(f"{label}:{'ok' if ok else 'DOWN'}")

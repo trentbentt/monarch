@@ -1,6 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import { useLiveState } from "./hooks/useLiveState.js";
 import { useHashRoute } from "./hooks/useHashRoute.js";
+import { useReachabilityAlert } from "./hooks/useReachabilityAlert.js";
 import DeepDiveView from "./components/deep/DeepDiveView.jsx";
 import LightningBackground from "./components/shell/LightningBackground.jsx";
 import AttentionList from "./components/AttentionList.jsx";
@@ -21,6 +22,17 @@ import SupervisorChat from "./components/SupervisorChat.jsx";
 // touches the dashboard/phone bundle. Desktop-only, once per session.
 const IntroSequence = lazy(() => import("./components/IntroSequence.jsx"));
 
+function UnreachableBanner({ alerting, offlineForMs }) {
+  if (!alerting) return null;
+  const mins = Math.max(1, Math.round(offlineForMs / 60000));
+  return (
+    <div className="stale-banner unreachable-banner" role="alert">
+      ⛔ Can’t reach monarch for ~{mins} min — the box may be down (power loss or
+      network). Showing last-known state.
+    </div>
+  );
+}
+
 function StaleBanner({ overview }) {
   if (!overview?.stale) return null;
   const age = overview.state_age_sec ? Math.round(overview.state_age_sec) : null;
@@ -32,7 +44,7 @@ function StaleBanner({ overview }) {
   );
 }
 
-function Console({ overview, state, routing, pending, conn, confirm, setConfirm }) {
+function Console({ overview, state, routing, pending, conn, confirm, setConfirm, reach }) {
   // Chat is collapsed natively so the bento gets the room; the operator opens it
   // to talk. Preference persists across reloads.
   const [chatOpen, setChatOpen] = useState(() => localStorage.getItem("cc:chat-open") === "1");
@@ -49,6 +61,7 @@ function Console({ overview, state, routing, pending, conn, confirm, setConfirm 
       <SideRail overview={overview} conn={conn} />
 
       <main className="console-main">
+        <UnreachableBanner alerting={reach?.alerting} offlineForMs={reach?.offlineForMs} />
         <StaleBanner overview={overview} />
 
         <section className="attention-strip">
@@ -94,6 +107,7 @@ function Console({ overview, state, routing, pending, conn, confirm, setConfirm 
 
 export default function App() {
   const { overview, state, routing, pending, conn } = useLiveState();
+  const reach = useReachabilityAlert(conn);
   const [confirm, setConfirm] = useState(null);
   const route = useHashRoute();
 
@@ -139,6 +153,7 @@ export default function App() {
         <div className="app loading">
           <span className={`conn conn-${conn}`}>{conn}</span>
           <p>Connecting to monarch…</p>
+          <UnreachableBanner alerting={reach.alerting} offlineForMs={reach.offlineForMs} />
         </div>
         {intro}
       </>
@@ -170,6 +185,7 @@ export default function App() {
         conn={conn}
         confirm={confirm}
         setConfirm={setConfirm}
+        reach={reach}
       />
       {intro}
     </>

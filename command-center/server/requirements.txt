@@ -8,5 +8,10 @@ cryptography==44.0.0
 # layer) and the dormant Workflows live reader. Optional at runtime — both
 # degrade to a clear note when it's absent.
 psycopg2-binary==2.9.10
+# Transitive dep of the in-process Loki supervisor: importing loki.supervisor
+# pulls loki.listeners.cron, which needs croniter. It is NOT in loki's own
+# requirements.txt, so pin it here — without it the supervisor console degrades
+# to "[supervisor layer unavailable … No module named 'croniter']".
+croniter==6.2.2
 pytest==8.3.4
 pytest-asyncio==0.25.2

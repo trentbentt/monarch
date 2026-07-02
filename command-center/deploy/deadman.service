@@ -1,0 +1,24 @@
+# Command Center dead-man's-switch heartbeat — Layer B of the "is monarch alive?"
+# story (see ../scripts/deadman-ping.sh). Oneshot fired by deadman.timer; phones
+# OUT to an external monitor so a dead monarch (power loss / crash / network down)
+# — which cannot send its own push — is caught by the monitor's missed-check-in
+# alert. Outbound-only; exposes nothing inbound.
+#
+# Install (user units):
+#   cp deploy/deadman.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now deadman.timer
+#
+# No-op until CC_DEADMAN_URL or ~/.config/inference/deadman.url is set, so it is
+# safe to enable the timer before wiring the URL.
+[Unit]
+Description=Command Center dead-man's-switch heartbeat (outbound check-in to external monitor)
+After=network-online.target command-center.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/projects/command-center/scripts/deadman-ping.sh
+# Reads CC_DEADMAN_URL / %h/.config/inference/deadman.url; a wedged box that still
+# has power will fail its local health gate and deliberately NOT check in.
+Nice=10
