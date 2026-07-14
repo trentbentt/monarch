@@ -10,17 +10,13 @@ from __future__ import annotations
 from .base import DeepDiveProvider
 
 # Static role map for the indexed repos — what each project IS, so the supervisor
-# scope and the UI can frame a repo without an L5 round-trip.
+# scope and the UI can frame a repo without an L5 round-trip. The private stack
+# indexes additional operator workspaces; this public skeleton lists only the
+# subsystems that are part of the showcase (lookups fall back to "" for the rest).
 _ROLES = {
     "loki (substrate)": "The monarch substrate — daemon, supervisor, memory routing, inference tiers.",
     "evidence-layer": "Deterministic accuracy substrate — the grounded ledger that refuses ungrounded claims.",
     "news-pipeline": "Deterministic news pipeline — ingest → verify → render.",
-
-
-
-
-
-
 }
 
 
