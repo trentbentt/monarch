@@ -1,11 +1,12 @@
 // Phase 3 control client: token storage + gated action calls.
 
 const TOKEN_KEY = "cc:control-token";
-// Storage-mode preference (non-secret). Default is the HARDENED path:
-// sessionStorage only — the token is wiped when the app closes and must be
-// re-pasted each launch, so a persistent localStorage copy is never an
-// XSS-exfiltration target at rest. The operator opts INTO persistence
-// ("remember on this device"); MODE_KEY === "persist" records that choice.
+// Storage-mode preference (non-secret). MODE_KEY holds "persist" or "session",
+// recording an explicit operator choice. Absent key defers to shell default:
+// hardened session-only in browsers/PWAs (no persistent XSS target at rest),
+// persistent in Tauri desktop shell (token already on disk; wiping storage buys
+// nothing, only forces re-paste each launch). Session-only is now written
+// explicitly to distinguish "chose session" from "no choice yet" (unset).
 const MODE_KEY = "cc:control-token-mode";
 
 // Web Storage may be absent (SSR / node test env). Degrade to no-token instead
@@ -13,8 +14,21 @@ const MODE_KEY = "cc:control-token-mode";
 function _ls() { try { return globalThis.localStorage ?? null; } catch { return null; } }
 function _ss() { try { return globalThis.sessionStorage ?? null; } catch { return null; } }
 
+/** True when the app runs inside the Tauri desktop shell — a local binary on
+ * the same machine as the server, where the control token already sits on
+ * disk in plain sight. Nothing is gained by wiping it from storage there. */
+function _isDesktopShell() {
+  try { return Boolean(globalThis.__TAURI_INTERNALS__); } catch { return false; }
+}
+
 export function isSessionOnly() {
-  return _ls()?.getItem(MODE_KEY) !== "persist";
+  const mode = _ls()?.getItem(MODE_KEY);
+  if (mode === "persist") return false;
+  if (mode === "session") return true;
+  // Unset: hardened default everywhere the device can be lost or shared
+  // (browser, phone PWA); persistent on the desktop shell, which otherwise
+  // makes the operator re-paste the token on every single launch.
+  return !_isDesktopShell();
 }
 
 export function getToken() {
@@ -29,7 +43,10 @@ export function setToken(t, { sessionOnly = isSessionOnly() } = {}) {
   if (sessionOnly) {
     ss?.setItem(TOKEN_KEY, v);
     ls?.removeItem(TOKEN_KEY); // never leave a persistent copy at rest
-    ls?.removeItem(MODE_KEY);  // session-only is the default
+    // Record the choice explicitly: on the desktop shell the *unset* default
+    // is now "persist", so clearing the key would silently flip the operator's
+    // deliberate session-only choice on the next read.
+    ls?.setItem(MODE_KEY, "session");
   } else {
     ls?.setItem(TOKEN_KEY, v);
     ss?.removeItem(TOKEN_KEY);

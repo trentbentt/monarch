@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { getToken, setToken, clearToken, isSessionOnly } from "./control.js";
 
 // vitest runs in the node environment (no DOM), so stub the two Web Storage
@@ -76,5 +76,42 @@ describe("control token storage", () => {
     expect(localStorage.getItem(TOKEN)).toBe(null);
     expect(sessionStorage.getItem(TOKEN)).toBe(null);
     expect(isSessionOnly()).toBe(true); // re-pair defaults back to hardened sessionStorage
+  });
+});
+
+describe("storage-mode default by shell (A2)", () => {
+  // Storage is reset by the file-level beforeEach; only the shell marker
+  // needs clearing, and it must not leak into other describe blocks.
+  beforeEach(() => { delete globalThis.__TAURI_INTERNALS__; });
+  afterEach(() => { delete globalThis.__TAURI_INTERNALS__; });
+
+  it("browser/phone default stays hardened (session-only)", () => {
+    expect(isSessionOnly()).toBe(true);
+  });
+
+  it("the Tauri desktop shell defaults to persistent", () => {
+    globalThis.__TAURI_INTERNALS__ = {};
+    expect(isSessionOnly()).toBe(false);
+  });
+
+  it("an explicit session choice survives on desktop", () => {
+    globalThis.__TAURI_INTERNALS__ = {};
+    setToken("tok-a", { sessionOnly: true });
+    expect(isSessionOnly()).toBe(true);
+    expect(localStorage.getItem("cc:control-token")).toBeNull();
+  });
+
+  it("an explicit persist choice survives in the browser", () => {
+    setToken("tok-b", { sessionOnly: false });
+    expect(isSessionOnly()).toBe(false);
+    expect(localStorage.getItem("cc:control-token")).toBe("tok-b");
+  });
+
+  it("clearing returns to the shell default", () => {
+    globalThis.__TAURI_INTERNALS__ = {};
+    setToken("tok-c", { sessionOnly: true });
+    expect(isSessionOnly()).toBe(true);
+    clearToken();
+    expect(isSessionOnly()).toBe(false);   // back to the desktop default
   });
 });
