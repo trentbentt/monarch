@@ -52,6 +52,46 @@ def _t1_offload_state() -> Tuple[bool, Optional[int]]:
     return True, (int(m.group(1)) if m else None)
 
 
+def _parse_mem_available_mb(meminfo: str) -> Optional[int]:
+    """MemAvailable (reclaim-aware free) in MB from /proc/meminfo text, or None
+    if the field is absent. MemAvailable — not MemFree — is the honest 'how much
+    can a workload use' number on a box that fills RAM with page cache."""
+    m = re.search(r"^MemAvailable:\s+(\d+)\s*kB", meminfo, re.MULTILINE)
+    return int(m.group(1)) // 1024 if m else None
+
+
+def _mem_available_mb() -> Optional[int]:
+    """Host MemAvailable in MB, best-effort (None on any read failure)."""
+    try:
+        with open("/proc/meminfo") as f:
+            return _parse_mem_available_mb(f.read())
+    except OSError:
+        return None
+
+
+def _host_loadavg() -> Optional[Tuple[float, float, float]]:
+    """(1m, 5m, 15m) load averages, best-effort (None on failure)."""
+    try:
+        return os.getloadavg()
+    except (OSError, ValueError):
+        return None
+
+
+def _apply_host_resources(model, load, mem_mb, now) -> None:
+    """Write host-level resources.cpu (load averages) and resources.ram
+    (MemAvailable). A None read leaves the field untouched and does NOT stamp
+    updated_at — a failed probe reads as a gap, never fake-fresh."""
+    if load is not None:
+        cpu = model.resources.cpu
+        cpu.load_avg_1m, cpu.load_avg_5m, cpu.load_avg_15m = (
+            float(load[0]), float(load[1]), float(load[2]))
+        cpu.updated_at = now
+    if mem_mb is not None:
+        ram = model.resources.ram
+        ram.free_mb = int(mem_mb)
+        ram.updated_at = now
+
+
 def _discover_tier_pids(self_pid: int) -> Dict[str, int]:
     """Scan /proc for processes whose --port maps to a monarch tier.
 
@@ -143,6 +183,8 @@ class ProcessListener(BaseListener):
         discovered = _discover_tier_pids(self_pid)
         sys_uptime = _system_uptime()
         t1_offloaded, t1_offload_ngl = _t1_offload_state()
+        host_load = _host_loadavg()
+        host_mem = _mem_available_mb()
 
         observations: Dict[str, dict] = {}
         restart_events: List[Tuple[str, int, Optional[int]]] = []  # (tier_id, count, pid)
@@ -228,6 +270,9 @@ class ProcessListener(BaseListener):
                 rt.last_restart_ts = obs["last_restart_ts"]
                 rt.offloaded = obs["offloaded"]
                 rt.offload_ngl = obs["offload_ngl"]
+            # Host-level resources (owner: this listener) — resources.vram is
+            # vram.py's; resources.ram/cpu were unwritten placeholders until now.
+            _apply_host_resources(model, host_load, host_mem, now)
 
         store.apply(update)
 
