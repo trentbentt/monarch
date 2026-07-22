@@ -17,9 +17,13 @@ jobs:
     name: contracts + loki + command-center
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v5/v6 are the Node 24 releases. The v4/v5 pair targeted Node 20, which
+      # the runners now force onto Node 24 and annotate as deprecated on every
+      # run; pinning the current majors drops the warning and keeps the suite
+      # off a runtime that is being removed.
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
