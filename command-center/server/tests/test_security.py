@@ -156,6 +156,19 @@ def test_read_gate_covers_all_state_and_content_reads(tmp_path, monkeypatch):
             assert c.get(path, headers=TOK).status_code == 200, f"{path} rejects a valid token"
 
 
+def test_read_gate_covers_the_whole_codebase_surface(tmp_path, monkeypatch):
+    """Both /api/codebase/* routes are gated. `projects` shipped without the
+    dependency its sibling carries, so with the gate ON it still returned every
+    indexed repo's name and absolute root_path to an untokened caller — an
+    inconsistency inside one feature block, not a deliberate open surface."""
+    main = _make_app(tmp_path, monkeypatch, require_reads="1")
+    with TestClient(main.app) as c:
+        assert c.get("/api/codebase/projects").status_code == 401
+        assert c.get("/api/codebase/projects", headers=TOK).status_code == 200
+        # sibling, asserted alongside so the block can't drift apart again
+        assert c.get("/api/codebase/search?project=p&q=x").status_code == 401
+
+
 def test_sse_stream_gated_and_accepts_query_token(tmp_path, monkeypatch):
     """The SSE /stream ships the same payload as the gated /state, so it must be
     gated too. EventSource can't send headers, so the gate also accepts ?token=

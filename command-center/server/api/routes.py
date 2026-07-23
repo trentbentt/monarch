@@ -131,9 +131,13 @@ async def memory_search(body: dict = Body(...)):
 
 # --- Codebase deep-dive: L5 structural index ---------------------------------
 
-@router.get("/codebase/projects")
+@router.get("/codebase/projects", dependencies=[Depends(require_read_token)])
 async def codebase_projects():
-    """Indexed repos with node/edge/size from the L5 structural index."""
+    """Indexed repos with node/edge/size from the L5 structural index.
+
+    Read-gated with its siblings below: the payload is every indexed repo's
+    name and absolute `root_path`. It was the only route in this block without
+    the dependency — an oversight, not an open surface by design."""
     import codebase_bridge
     return await asyncio.to_thread(codebase_bridge.projects)
 
