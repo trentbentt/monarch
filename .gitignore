@@ -39,3 +39,6 @@ logs/
 # Scratch
 _artifacts/
 .patch-backups/
+
+# hypothesis test cache holds absolute /home paths — never publishable
+.hypothesis/
