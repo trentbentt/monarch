@@ -189,23 +189,32 @@ async def supervisor_ask(request: Request, body: dict = Body(...)):
 
 
 # --- Phase 2: Web Push -------------------------------------------------------
+# This whole block shipped with NO dependency, so it answered an untokened caller
+# even with the read-gate ON. subscribe/unsubscribe are not reads: they decide
+# WHERE operator alerts are delivered, which makes an open surface here an
+# alert-routing control. Gated with the read-token so the block moves with the
+# rest of the sensitive surface; /push/test actuates and takes the control token.
 
-@router.get("/push/vapid-key")
+@router.get("/push/vapid-key", dependencies=[Depends(require_read_token)])
 async def push_vapid_key():
     from push import vapid
     return {"applicationServerKey": vapid.application_server_key()}
 
 
-@router.post("/push/subscribe")
+@router.post("/push/subscribe", dependencies=[Depends(require_read_token)])
 async def push_subscribe(subscription: dict = Body(...)):
     from push import subscriptions
     if not subscription.get("endpoint"):
         raise HTTPException(status_code=400, detail="missing endpoint")
-    total = subscriptions.add(subscription)
+    try:
+        total = subscriptions.add(subscription)
+    except subscriptions.StoreFull as e:
+        # 503, not a silent eviction of whoever was already registered.
+        raise HTTPException(status_code=503, detail=str(e))
     return {"ok": True, "total": total}
 
 
-@router.post("/push/unsubscribe")
+@router.post("/push/unsubscribe", dependencies=[Depends(require_read_token)])
 async def push_unsubscribe(body: dict = Body(...)):
     from push import subscriptions
     endpoint = body.get("endpoint")
@@ -215,9 +224,12 @@ async def push_unsubscribe(body: dict = Body(...)):
     return {"ok": True, "total": subscriptions.count()}
 
 
-@router.post("/push/test")
+@router.post("/push/test", dependencies=[Depends(require_control_token)])
 async def push_test():
-    """Operator-triggered delivery check (interrupt-class test payload)."""
+    """Operator-triggered delivery check (interrupt-class test payload).
+
+    Control-gated, not read-gated: it delivers a real notification to every
+    registered device, so an open surface is a way to spam the operator."""
     from push import sender
     result = sender.send_all({
         "title": "Monarch · test",

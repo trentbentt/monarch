@@ -218,15 +218,198 @@ def test_audit_log_rotates_past_cap(tmp_path, monkeypatch):
 
 
 def test_push_subscriptions_capped(tmp_path, monkeypatch):
-    """Unauthenticated Web Push registration is bounded: the store keeps only the
-    most-recent N, dropping the oldest (FIFO)."""
+    """Web Push registration is bounded: the store never exceeds the cap.
+
+    It used to keep the most-recent N and drop the OLDEST, which made the cap a
+    silencing primitive — see test_push_registration_cannot_evict_a_subscriber.
+    The bound is still enforced; only the eviction victim changed."""
+    import pytest
     from push import subscriptions
     import config as _cfg
     monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
     monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 5)
-    for i in range(20):
+    for i in range(5):
         subscriptions.add({"endpoint": f"https://push.example/{i}"})
-    assert subscriptions.count() == 5
+    with pytest.raises(subscriptions.StoreFull):
+        subscriptions.add({"endpoint": "https://push.example/overflow"})
+    assert subscriptions.count() == 5           # bounded, not unbounded growth
+
+
+# --- The push surface: gating + the eviction primitive -----------------------
+
+def _auth_guards(route):
+    """The set of auth dependencies enforced on a route (walks sub-dependencies)."""
+    from control.auth import (require_control_token, require_read_token,
+                              require_read_token_sse)
+    known = {require_control_token, require_read_token, require_read_token_sse}
+    found, stack = set(), list(getattr(getattr(route, "dependant", None), "dependencies", []))
+    while stack:
+        d = stack.pop()
+        if d.call in known:
+            found.add(d.call)
+        stack.extend(d.dependencies)
+    return found
+
+
+# Routes that answer an untokened caller BY DESIGN, each with its reason. Adding
+# a route here is a deliberate act; forgetting to gate one is not.
+_OPEN_BY_DESIGN = {
+    "/api/health": "backend liveness only — no state, no secrets",
+    "/api/control/actions": "the closed action enum; informational, no actuation",
+}
+
+
+def test_every_api_route_is_gated_or_explicitly_open(tmp_path, monkeypatch):
+    """Enumerate the ACTUAL route table and require every /api route to carry an
+    auth dependency or sit in the open-by-design allow-list.
+
+    The read-gate tests assert against hand-written path lists, so a route added
+    without a dependency is invisible to them by construction — that is how
+    /api/codebase/projects shipped open, and how the whole /api/push/* block did.
+    A census of names cannot prove absence; this enumerates the population."""
+    from fastapi.routing import APIRoute
+    main = _make_app(tmp_path, monkeypatch, require_reads="1")
+    ungated = []
+    for route in main.app.routes:
+        if not isinstance(route, APIRoute) or not route.path.startswith("/api"):
+            continue
+        if route.path in _OPEN_BY_DESIGN or _auth_guards(route):
+            continue
+        ungated.append(f"{sorted(route.methods)} {route.path}")
+    assert not ungated, (
+        "these /api routes answer an untokened caller and are not declared "
+        "open-by-design:\n  " + "\n  ".join(sorted(ungated)))
+
+
+def test_push_surface_is_read_gated(tmp_path, monkeypatch):
+    """With the read-gate ON, the push routes must not answer an untokened
+    caller. /push/subscribe and /push/unsubscribe MUTATE server-side state that
+    decides where operator alerts are delivered, so an open surface here is an
+    alert-routing control, not a read."""
+    main = _make_app(tmp_path, monkeypatch, require_reads="1")
+    with TestClient(main.app) as c:
+        assert c.get("/api/push/vapid-key").status_code == 401
+        assert c.get("/api/push/vapid-key", headers=TOK).status_code == 200
+        sub = {"endpoint": "https://push.example/a"}
+        assert c.post("/api/push/subscribe", json=sub).status_code == 401
+        assert c.post("/api/push/subscribe", json=sub, headers=TOK).status_code == 200
+        body = {"endpoint": "https://push.example/a"}
+        assert c.post("/api/push/unsubscribe", json=body).status_code == 401
+        assert c.post("/api/push/unsubscribe", json=body, headers=TOK).status_code == 200
+
+
+def test_push_test_requires_the_control_token(tmp_path, monkeypatch):
+    """/push/test actuates — it delivers a notification to every registered
+    device. That is a control action, so it needs the control token even in the
+    default posture where reads are open."""
+    main = _make_app(tmp_path, monkeypatch)          # read-gate OFF (default)
+    with TestClient(main.app) as c:
+        assert c.post("/api/push/test").status_code == 401
+
+
+def test_push_registration_cannot_evict_a_subscriber(tmp_path, monkeypatch):
+    """Registering new subscriptions must never displace an EXISTING one.
+
+    The cap dropped the oldest entry, and the operator's own device is the
+    oldest (registered at PWA install). So filling the store silently removed
+    the operator from the delivery list and alerts went only to the newcomers —
+    the bound meant to stop disk growth became a way to go dark."""
+    from push import subscriptions
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
+    monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 5)
+
+    operator = "https://fcm.googleapis.com/OPERATOR-DEVICE"
+    subscriptions.add({"endpoint": operator})
+    refused = 0
+    for i in range(50):                      # far past the cap
+        try:
+            subscriptions.add({"endpoint": f"https://flood.example/{i}"})
+        except subscriptions.StoreFull:
+            refused += 1                     # full store refuses; it does not evict
+
     eps = {s["endpoint"] for s in subscriptions.all()}
-    assert "https://push.example/19" in eps     # most-recent kept
-    assert "https://push.example/0" not in eps  # oldest evicted
+    assert operator in eps, "the operator's device was evicted by new registrations"
+    assert subscriptions.count() <= 5, "the cap must still bound the store"
+    assert refused, "a store past capacity must refuse, not silently absorb"
+
+
+def test_existing_subscriber_can_always_re_register(tmp_path, monkeypatch):
+    """A full store must not lock out an endpoint it already holds — browsers
+    re-subscribe periodically, and that refresh must not start failing."""
+    from push import subscriptions
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
+    monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 3)
+    for i in range(3):
+        subscriptions.add({"endpoint": f"https://push.example/{i}"})
+    subscriptions.add({"endpoint": "https://push.example/1", "keys": {"p256dh": "new"}})
+    stored = {s["endpoint"]: s for s in subscriptions.all()}
+    assert stored["https://push.example/1"].get("keys") == {"p256dh": "new"}
+    assert len(stored) == 3
+
+
+# --- Auth: a malformed token must deny, not crash ----------------------------
+
+def test_non_ascii_token_is_denied_and_audited(tmp_path, monkeypatch):
+    """secrets.compare_digest raises TypeError on non-ASCII str. Uncaught, that
+    turned a 401 into a 500 AND skipped _deny(), so a prober who sends one
+    non-ASCII byte left no audit trace — defeating 'token probing must not be
+    silent' with a single character.
+
+    Exercised on the dependency directly (as the SSE gate is): httpx refuses to
+    encode a non-ASCII header value client-side, so TestClient cannot reach this
+    path. A raw client can — uvicorn decodes header bytes as latin-1, so any
+    byte in 0x80-0xFF arrives as a non-ASCII str."""
+    import asyncio
+    import pytest
+    from fastapi import HTTPException
+    from control import auth
+
+    _make_app(tmp_path, monkeypatch)
+    for supplied in ["caf\xe9", "\xff" * 8, "test-token-123\xe9"]:
+        with pytest.raises(HTTPException) as ei:
+            asyncio.run(auth.require_control_token(
+                authorization=None, x_cc_token=supplied))
+        assert ei.value.status_code == 401, f"{supplied!r} did not deny cleanly"
+    assert "denied" in _audit_text(tmp_path), "the probes left no audit trace"
+
+    # the same byte in the Bearer branch and the SSE query-param branch
+    with pytest.raises(HTTPException):
+        asyncio.run(auth.require_control_token(
+            authorization="Bearer caf\xe9", x_cc_token=None))
+    monkeypatch.setattr(__import__("config"), "REQUIRE_TOKEN_FOR_READS", True)
+    with pytest.raises(HTTPException):
+        asyncio.run(auth.require_read_token_sse(
+            token="caf\xe9", authorization=None, x_cc_token=None))
+
+
+# --- argv flag-injection at the loki-q boundary ------------------------------
+
+def test_reason_never_reaches_argv_as_a_flag(tmp_path, monkeypatch):
+    """The demote `reason` is appended to argv, so it must never begin with '-'.
+
+    Stripping dashes and THEN stripping whitespace is order-dependent: the
+    second strip re-exposes a dash that the first one hid behind a space, so
+    '- -force' survived as '-force' and '--- --json' as '--json' — the exact
+    flag the builder appends itself. argv is a list (no shell), so flag
+    injection is the only vector left at this boundary."""
+    from control import registry
+    hostile = ["--force", "- -force", "--- --json", "-\t-rf", "  --  --json  ",
+               "-", "--", "- - - -x"]
+    for raw in hostile:
+        cleaned = registry._reason({"reason": raw})
+        assert not cleaned.startswith("-"), f"{raw!r} -> {cleaned!r} leads with a dash"
+        argv = registry._SPECS["demote"].build(
+            {"action_id": "some_action", "reason": cleaned})
+        flags = [a for a in argv[4:] if a.startswith("-") and a != "--json"]
+        assert not flags, f"{raw!r} put {flags} into argv as flags"
+
+
+def test_reason_keeps_a_legitimate_reason_intact(tmp_path, monkeypatch):
+    """The dash-strip must not eat ordinary operator prose."""
+    from control import registry
+    assert registry._reason({"reason": "flapping since 03:00"}) == "flapping since 03:00"
+    assert registry._reason({"reason": "a-b-c"}) == "a-b-c"       # inner dashes kept
+    assert registry._reason({"reason": ""}) == "operator action (dashboard)"
+    assert len(registry._reason({"reason": "x" * 500})) == 200    # still capped

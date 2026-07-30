@@ -26,20 +26,36 @@ def _write(subs: List[dict]) -> None:
     p.write_text(json.dumps(subs, indent=2))
 
 
+class StoreFull(Exception):
+    """The subscription store is at capacity and the endpoint is not already in it."""
+
+
 def add(subscription: dict) -> int:
-    """Upsert by endpoint. Returns the new total count."""
+    """Upsert by endpoint. Returns the new total count.
+
+    Capacity is enforced by REFUSING a new endpoint, never by evicting a stored
+    one. The cap used to keep the most-recent N and drop the oldest, which made
+    it a silencing primitive: the operator's own device is the oldest entry
+    (registered at PWA install), so anyone able to reach this endpoint could fill
+    the store and quietly remove the operator from the delivery list — alerts
+    then went only to the newcomers. Refusing instead bounds the store just as
+    hard while making a full store loud (the caller gets an error) rather than a
+    silent loss of the one subscriber that matters. An endpoint already stored
+    always re-registers, so a browser's periodic refresh never trips the cap."""
     ep = subscription.get("endpoint")
     if not ep:
         raise ValueError("subscription missing endpoint")
     with _lock:
-        subs = [s for s in _read() if s.get("endpoint") != ep]
-        subs.append(subscription)
-        # Registration is unauthenticated — cap the store so a tailnet peer can't
-        # grow it without bound. Keep the most-recent N (FIFO drop of the oldest).
-        if len(subs) > config.PUSH_MAX_SUBS:
-            subs = subs[-config.PUSH_MAX_SUBS:]
-        _write(subs)
-        return len(subs)
+        existing = _read()
+        kept = [s for s in existing if s.get("endpoint") != ep]
+        is_new = len(kept) == len(existing)
+        if is_new and len(kept) >= config.PUSH_MAX_SUBS:
+            raise StoreFull(
+                f"push subscription store is full ({config.PUSH_MAX_SUBS}); "
+                "refusing a new endpoint rather than evicting a stored one")
+        kept.append(subscription)
+        _write(kept)
+        return len(kept)
 
 
 def remove(endpoint: str) -> None:

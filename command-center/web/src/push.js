@@ -1,4 +1,10 @@
 // Web Push subscribe flow (client side).
+//
+// Every call goes through apiFetch so the control token rides along when one is
+// paired: the /api/push/* routes are gated server-side (subscribe/unsubscribe
+// decide where operator alerts land, and /push/test actuates), so a bare fetch()
+// here would 401 the moment CC_REQUIRE_TOKEN_FOR_READS is enabled.
+import { apiFetch } from "./control.js";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -30,7 +36,11 @@ export async function enablePush() {
   if (perm !== "granted") throw new Error("Notification permission denied");
 
   const reg = await navigator.serviceWorker.ready;
-  const keyResp = await fetch("/api/push/vapid-key");
+  const keyResp = await apiFetch("/api/push/vapid-key");
+  // Gated route: without this check a 401 body yields applicationServerKey
+  // undefined, and the failure surfaces as an opaque atob() error much later.
+  if (!keyResp.ok) throw new Error(
+    keyResp.status === 401 ? "pair the control token first" : "vapid key unavailable");
   const { applicationServerKey } = await keyResp.json();
 
   let sub = await reg.pushManager.getSubscription();
@@ -40,7 +50,7 @@ export async function enablePush() {
       applicationServerKey: urlBase64ToUint8Array(applicationServerKey),
     });
   }
-  const r = await fetch("/api/push/subscribe", {
+  const r = await apiFetch("/api/push/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(sub),
@@ -50,6 +60,11 @@ export async function enablePush() {
 }
 
 export async function sendTest() {
-  const r = await fetch("/api/push/test", { method: "POST" });
+  const r = await apiFetch("/api/push/test", { method: "POST" });
+  // /push/test takes the CONTROL token (it delivers to every device), so an
+  // unpaired client gets 401. Without this the caller renders the error body as
+  // "test: undefined sent, undefined failed".
+  if (!r.ok) throw new Error(
+    r.status === 401 ? "pair the control token first" : `test failed (${r.status})`);
   return await r.json();
 }

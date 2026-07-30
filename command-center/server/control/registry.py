@@ -17,6 +17,8 @@ from typing import Callable, List, Optional
 import config
 
 _ID_RE = re.compile(r"^[a-z0-9_]+$")
+# Any leading run of dashes and whitespace, consumed in ONE pass — see _reason().
+_LEADING_FLAGISH_RE = re.compile(r"^[-\s]+")
 _SHELL_TIMEOUT = 30.0
 
 
@@ -47,12 +49,15 @@ def _ngl(params: dict) -> Optional[int]:
 
 
 def _reason(params: dict) -> str:
-    r = str(params.get("reason", "")).strip()
-    # Strip leading dashes so the reason can never be parsed as a loki-q flag
-    # when appended as a trailing argv (e.g. "--force"). argv is a list (no
-    # shell), so flag-injection is the only vector left at this boundary.
-    r = r.lstrip("-").strip()
-    return (r or "operator action (dashboard)")[:200]
+    # Strip every leading dash AND space so the reason can never be parsed as a
+    # loki-q flag when appended as a trailing argv (e.g. "--force"). argv is a
+    # list (no shell), so flag-injection is the only vector left at this
+    # boundary. This must strip the two characters TOGETHER: doing dashes first
+    # and whitespace second is order-dependent, and the second pass re-exposes a
+    # dash the first pass hid behind a space ("- -force" -> "-force",
+    # "--- --json" -> "--json", the very flag the builder appends itself).
+    r = _LEADING_FLAGISH_RE.sub("", str(params.get("reason", "")))
+    return (r.strip() or "operator action (dashboard)")[:200]
 
 
 # --- action spec -------------------------------------------------------------

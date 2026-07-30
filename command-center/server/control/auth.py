@@ -57,11 +57,22 @@ def _present(authorization: str | None, x_cc_token: str | None) -> str | None:
     return None
 
 
+def _same(supplied: str, expected: str) -> bool:
+    """Constant-time compare that DENIES a malformed token instead of raising.
+
+    secrets.compare_digest rejects str with non-ASCII characters (TypeError).
+    Uncaught, one non-ASCII byte in the header turned a 401 into a 500 and — far
+    worse — skipped _deny(), so that probe left no audit trace at all. Comparing
+    the UTF-8 bytes keeps the comparison constant-time and makes every
+    well-formed-or-not token take the same denial path."""
+    return secrets.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8"))
+
+
 def _valid(authorization: str | None, x_cc_token: str | None) -> bool:
     supplied = _present(authorization, x_cc_token)
     if not supplied:
         return False
-    return secrets.compare_digest(supplied, get_token())
+    return _same(supplied, get_token())
 
 
 def _deny(kind: str) -> None:
@@ -113,6 +124,6 @@ async def require_read_token_sse(
         return
     if _valid(authorization, x_cc_token):
         return
-    if token and secrets.compare_digest(token, get_token()):
+    if token and _same(token, get_token()):
         return
     _deny("read_auth")

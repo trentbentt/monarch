@@ -37,8 +37,8 @@ export default function PushControls() {
     try {
       const r = await sendTest();
       setMsg(`test: ${r.sent} sent, ${r.failed} failed`);
-    } catch {
-      setMsg("test failed");
+    } catch (e) {
+      setMsg(e.message || "test failed");
     }
   };
 
