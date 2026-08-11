@@ -143,6 +143,16 @@ def vram_pressure_offload_t1(model: SystemModel) -> List[ProposedAction]:
     t1 = model.tiers.get("t1")
     if t1 is None or t1.runtime.offloaded:
         return []
+    if t1.runtime.state == TierState.FAILED:
+        # You cannot offload a tier that is not running: "move a portion of T1's
+        # layers to CPU" is meaningless for a dead process, and t1_down_restore
+        # owns this state. Without this guard the two co-fire, because oom_risk
+        # is a LAGGING reading — a dead T1 has released its ~16 GB, but vram.py
+        # only learns that on its next poll, so the stale pressure arms an
+        # offload against a corpse. T1 would then be relaunched at full -ngl by
+        # the restore and immediately relaunched again at reduced -ngl by the
+        # offload: two ~180s model loads back to back. (agentbench, 2026-07-16)
+        return []
     if model.resources.vram.oom_risk not in _VRAM_PRESSURE:
         return []
     if _higher_cascade_rung_available(model):
@@ -156,6 +166,8 @@ def vram_pressure_offload_t1(model: SystemModel) -> List[ProposedAction]:
         dedup_key="offload_t1_reasoning",
         rationale=("VRAM pressure persists in the overnight window; offloading a "
                    "portion of T1 to RAM to free headroom for the burst"),
+        evidence={"oom_risk": model.resources.vram.oom_risk.value,
+                  "t1_offloaded": t1.runtime.offloaded},
         proposed_at=_utcnow(),
     )]
 
@@ -175,6 +187,66 @@ def restore_t1_when_window_closes(model: SystemModel) -> List[ProposedAction]:
         params={},
         dedup_key="restore_t1_reasoning",
         rationale="overnight window closed; restoring T1 to full GPU residency",
+        evidence={"t1_offloaded": t1.runtime.offloaded},
+        proposed_at=_utcnow(),
+    )]
+
+
+def t1_down_restore(model: SystemModel) -> List[ProposedAction]:
+    """T1 (the reasoning brain) is FAILED at full residency → relaunch it.
+
+    Gap found by agentbench #5 (2026-07-16): T1 was the ONLY tier with no
+    autonomous recovery. `crashed_cpu_tier` covers the CPU dataplane (t3/t4/t5),
+    `unresponsive_burst_tier` covers the burst (t2), and
+    `restore_t1_when_window_closes` requires `runtime.offloaded` — i.e. the
+    offload marker — so a T1 that simply DIES at full residency matched nothing
+    and stayed down until the operator noticed. For the single most important
+    tier on the box.
+
+    Nothing new is being invented here: `~/bin/t1-restore` already relaunches T1
+    at full -ngl (it only no-ops when T1 is BOTH unmarked AND healthy, so it
+    handles a dead tier correctly), and `restore_t1_reasoning` already wraps it
+    as a Tier-2 action. Only the trigger was missing.
+
+    Scoped to `not offloaded` on purpose — that keeps this rule and
+    `restore_t1_when_window_closes` mutually exclusive by construction:
+      • offloaded + down  = a FAILED OFFLOAD. Already covered by
+        `offload_t1_reasoning.rollback()` and by the window-close rule.
+      • not offloaded + FAILED = the uncovered case. This rule.
+    It also cannot fight an offload (§10.3, and the loadtest restore-vs-offload
+    finding) — but NOT for the reason it first appears. "A dead T1 has released
+    its ~16 GB so there is no pressure to arm the offload" is FALSE: `oom_risk`
+    is a lagging reading, and vram.py only learns the VRAM is free on its next
+    poll, so a stale IMMINENT reading will happily arm an offload against a
+    corpse. Both rules did co-fire when tested. The guarantee is structural
+    instead: `vram_pressure_offload_t1` now refuses a FAILED T1 outright (you
+    cannot offload a process that is not running), so this rule owns the
+    down-state alone.
+
+    Thrash is bounded by the Phase-D service flap guard, which counts
+    `restore_t1_reasoning` executions in the journal (ANY outcome — a successful
+    relaunch is not a healthy tier) and at SERVICE_FLAP_THRESHOLD_24H drops the
+    proposal and writes an escalation brief: "at Tier 2 it is the difference
+    between auto-heals and auto-thrashes". A crash-looping T1 therefore gets a
+    bounded number of attempts, then the operator.
+    """
+    t1 = model.tiers.get("t1")
+    if t1 is None or t1.runtime.offloaded:
+        return []
+    if t1.runtime.state != TierState.FAILED:
+        return []
+    return [ProposedAction(
+        action_id="restore_t1_reasoning",
+        trigger="t1_down",
+        params={},
+        # Same key as the window-close rule: the two are mutually exclusive by
+        # construction, and sharing the key means neither can ever double-propose.
+        dedup_key="restore_t1_reasoning",
+        rationale=("T1 reasoning is FAILED at full GPU residency; relaunching it "
+                   "— no other rule covers a downed T1"),
+        evidence={"t1_state": t1.runtime.state.value,
+                  "t1_health": t1.runtime.health_status.value,
+                  "t1_offloaded": t1.runtime.offloaded},
         proposed_at=_utcnow(),
     )]
 
@@ -202,9 +274,91 @@ def crashed_cpu_tier(model: SystemModel) -> List[ProposedAction]:
                 params={"tier": tid},
                 dedup_key=f"auto_restart_cpu_dataplane_tier:{tid}",
                 rationale=f"{tid} crashed (state=failed); idempotent restart via t{tid[-1]}-up",
+                evidence={"tier": tid, "state": rt.state.value,
+                          "health_status": rt.health_status.value,
+                          "restart_count_24h": rt.restart_count_24h},
                 proposed_at=_utcnow(),
             ))
     return out
+
+
+def unresponsive_burst_tier(model: SystemModel) -> List[ProposedAction]:
+    """Autonomy-spine Phase A seed (t2-recover): a burst tier (burst_only &
+    enabled — T2 today) is UNRESPONSIVE. tier_health maps a marker'd teardown
+    to IDLE, so UNRESPONSIVE here means an UNEXPECTED death (the 2026-07-12
+    incident class), never a deliberate offload. Flap-guarded like
+    crashed_cpu_tier; the action re-checks marker + health at execute time
+    because recovery re-occupies GPU VRAM and the snapshot lags ~1 sweep."""
+    out: List[ProposedAction] = []
+    for tid in BURST_TIERS:
+        t = model.tiers.get(tid)
+        if t is None:
+            continue
+        rt = t.runtime
+        if (rt.state == _CRASHED_STATE
+                and rt.health_status == _DOWN_HEALTH
+                and rt.restart_count_24h < _FLAP_THRESHOLD):
+            out.append(ProposedAction(
+                action_id="recover_burst_tier",
+                trigger=f"tier_health:burst_unresponsive:{tid}",
+                params={"tier": tid},
+                dedup_key=f"recover_burst_tier:{tid}",
+                rationale=(f"{tid} burst unresponsive with no idle marker — "
+                           f"unexpected death; recover via ~/bin/{tid}-up"),
+                evidence={"tier": tid, "state": rt.state.value,
+                          "health_status": rt.health_status.value,
+                          "restart_count_24h": rt.restart_count_24h},
+                proposed_at=_utcnow(),
+            ))
+    return out
+
+
+# ── Phase-A service-respawn seeds (gate + LiteLLM router) ────────────────────
+# Service components carry no restart counter yet, so the flap guard for these
+# is the Tier-3 BLOCKING ask itself — every respawn is operator-approved in
+# Phase A. A service-level flap guard is a Phase-D promotion prerequisite.
+_GATE_COMPONENT = "validation-gate"
+_ROUTER_COMPONENT = "litellm"
+
+
+def validation_gate_down(model: SystemModel) -> List[ProposedAction]:
+    """Autonomy-spine Phase A seed (gate-respawn): the validation gate's
+    /health is UNRESPONSIVE per the tier_health service sweep."""
+    for comp in model.health.components:
+        if comp.name == _GATE_COMPONENT and comp.status == HealthStatus.UNRESPONSIVE:
+            return [ProposedAction(
+                action_id="respawn_validation_gate",
+                trigger="tier_health:service_unresponsive:validation-gate",
+                params={},
+                dedup_key="respawn_validation_gate",
+                rationale="validation-gate :4100 /health unresponsive — respawn via ~/bin/gate-up",
+                evidence={"component": comp.name, "status": comp.status.value,
+                          "last_seen_healthy": str(comp.last_seen_healthy),
+                          "detail": comp.detail},
+                proposed_at=_utcnow(),
+            )]
+    return []
+
+
+def litellm_router_down(model: SystemModel) -> List[ProposedAction]:
+    """Autonomy-spine Phase A seed (litellm-reload, dead-router trigger): the
+    LiteLLM router's /health/liveliness is UNRESPONSIVE. The config-drift
+    trigger (litellm-reload proper) lands with the Phase C tier-truth sensor;
+    this rule and its action are the executor either trigger will use."""
+    for comp in model.health.components:
+        if comp.name == _ROUTER_COMPONENT and comp.status == HealthStatus.UNRESPONSIVE:
+            return [ProposedAction(
+                action_id="respawn_litellm_router",
+                trigger="tier_health:service_unresponsive:litellm",
+                params={},
+                dedup_key="respawn_litellm_router",
+                rationale="LiteLLM router :4000 unresponsive — respawn via ~/bin/litellm-respawn",
+                evidence={"component": comp.name, "status": comp.status.value,
+                          "last_seen_healthy": str(comp.last_seen_healthy),
+                          "detail": comp.detail},
+                proposed_at=_utcnow(),
+            )]
+    return []
 
 
 def evict_idle_burst_under_pressure(model: SystemModel) -> List[ProposedAction]:
@@ -239,6 +393,10 @@ def evict_idle_burst_under_pressure(model: SystemModel) -> List[ProposedAction]:
             dedup_key=f"evict_idle_burst_tier:{tid}",
             rationale=(f"VRAM pressure; {tid} burst is idle (0 in-flight) and holding GPU "
                        f"— evict to reclaim headroom before the last-resort T1 offload"),
+            evidence={"tier": tid,
+                      "oom_risk": model.resources.vram.oom_risk.value,
+                      "active_requests": t.runtime.active_requests,
+                      "holding_gpu_mb": getattr(ubt, tid, 0)},
             proposed_at=_utcnow(),
         ))
     return out
@@ -248,6 +406,10 @@ def evict_idle_burst_under_pressure(model: SystemModel) -> List[ProposedAction]:
 # self-offload (rung 4); restart sits outside the VRAM cascade.
 RULES: List[Rule] = [
     crashed_cpu_tier,
+    unresponsive_burst_tier,
+    t1_down_restore,
+    validation_gate_down,
+    litellm_router_down,
     evict_idle_burst_under_pressure,
     vram_pressure_offload_t1,
     restore_t1_when_window_closes,
