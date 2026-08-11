@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "../control.js";
 
 function fmtAge(s) {
   if (s == null) return "age ?";
@@ -15,7 +16,7 @@ export default function MemoryQueues() {
   useEffect(() => {
     let on = true;
     const load = () =>
-      fetch("/api/memory/queues")
+      apiFetch("/api/memory/queues")
         .then((r) => r.json())
         .then((d) => on && setData(d))
         .catch(() => on && setErr("unreachable"));

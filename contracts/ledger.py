@@ -21,6 +21,9 @@ LEDGER_FIELDS = frozenset({
     "current_tier",
     "target_tier",
     "clean_run_count",
+    # Phase D tenure clock (spine-D1): when the current clean streak began.
+    # Optional[datetime]; legacy rows hydrate None and are not tenure-eligible.
+    "streak_started_at",
     "state",
     "total_runs",
     "last_fired",

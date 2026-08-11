@@ -22,8 +22,9 @@ import logging
 import os
 import subprocess
 
-from ..schema import ActionTier
-from .base import Action
+from ..schema import ActionTier, MONARCH_TIERS
+from ..listeners.process import _t1_offload_state
+from .base import Action, _http_ok
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,15 @@ _SCRIPT = os.path.expanduser("~/bin/t1-offload")
 # T1 to bind /health; give the subprocess a margin beyond that.
 _OFFLOAD_TIMEOUT_SEC = 240
 
+# Reverse script, named by `reversible = True` and run by rollback(). Same script
+# restore_t1_reasoning shells to — one mechanism, two callers.
+_REVERSE_SCRIPT = os.path.expanduser("~/bin/t1-restore")
+_REVERSE_TIMEOUT_SEC = 240
+
 
 class OffloadT1Reasoning(Action):
     action_id   = "offload_t1_reasoning"
+    action_class = "service-lifecycle"
     description = "Offload a portion of T1 reasoning GPU→CPU/DDR5 (reduced -ngl) to free VRAM for a burst (§10.3)"
     default_tier = ActionTier.TIER_3     # surface-and-ask (non-blocking, see veto window)
     target_tier  = ActionTier.TIER_3     # never auto-promotes — a disruptive move always wants the veto
@@ -74,4 +81,69 @@ class OffloadT1Reasoning(Action):
 
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
         logger.error("[action:offload_t1] failed (rc=%d): %s", proc.returncode, " | ".join(tail))
+        return "failed"
+
+    def verify(self, params: dict) -> str:
+        """T1 must answer /health AND actually be offloaded.
+
+        Liveness alone is NOT proof this action did its job: T1 is RELAUNCHED at
+        a reduced -ngl, never stopped, so /health answers before and after — and
+        answers just as happily if the script did nothing at all. Verifying only
+        the port let a no-op score execute=ok + verify=ok, which the ledger
+        records as "ok" and the autonomy ladder counts as a clean run toward
+        promotion (agentbench #5, 2026-07-16).
+
+        The marker written by ~/bin/t1-offload is the source of truth for
+        residency — the same one process.py reads to populate
+        tier.runtime.offloaded — so verify confirms the CLAIMED EFFECT (layers
+        moved GPU→CPU, VRAM freed), not merely that the tier is alive.
+        """
+        port = MONARCH_TIERS["t1"].port
+        if not _http_ok(f"http://127.0.0.1:{port}/health", timeout=10.0):
+            logger.error("[action:offload_t1] verify: T1 not answering /health")
+            return "failed"
+        offloaded, ngl = _t1_offload_state()
+        if not offloaded:
+            logger.error("[action:offload_t1] verify: T1 answers but is NOT "
+                         "offloaded — the relaunch did not take effect")
+            return "failed"
+        logger.info("[action:offload_t1] verify: T1 offloaded (ngl=%s)", ngl)
+        return "ok"
+
+    def rollback(self, params: dict) -> str:
+        """Undo the offload by running the reverse script this action's
+        `reversible = True` already names.
+
+        The gate calls rollback() in exactly one situation (authority.py):
+        execute() said "ok" but verify() said "failed". For this action that
+        means T1 is offloaded-but-broken or off its port entirely — the
+        reasoning brain, with NO rule that autonomously recovers it. Returning
+        "unsupported" here (the previous behaviour) meant the gate asked for the
+        undo it had been promised and got nothing (agentbench #5, 2026-07-16).
+        """
+        if not (os.path.isfile(_REVERSE_SCRIPT) and os.access(_REVERSE_SCRIPT, os.X_OK)):
+            logger.error("[action:offload_t1] rollback: reverse script "
+                         "missing/not-executable: %s", _REVERSE_SCRIPT)
+            return "failed"
+        try:
+            logger.warning("[action:offload_t1] rollback → %s", _REVERSE_SCRIPT)
+            proc = subprocess.run(
+                [_REVERSE_SCRIPT], capture_output=True, text=True,
+                timeout=_REVERSE_TIMEOUT_SEC,
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("[action:offload_t1] rollback timed out after %ds",
+                         _REVERSE_TIMEOUT_SEC)
+            return "failed"
+        except Exception as exc:  # never raise — the gate records the outcome
+            logger.error("[action:offload_t1] rollback raised %s: %s",
+                         type(exc).__name__, exc)
+            return "failed"
+        if proc.returncode == 0:
+            logger.info("[action:offload_t1] rollback ok — T1 restored")
+            return "ok"
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
+        logger.error("[action:offload_t1] rollback FAILED (rc=%d): %s — T1 may "
+                     "be degraded; operator attention needed",
+                     proc.returncode, " | ".join(tail))
         return "failed"

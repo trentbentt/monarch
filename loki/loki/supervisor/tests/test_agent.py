@@ -67,11 +67,21 @@ def test_agent_retrieves_then_answers(monkeypatch):
     assert any("vault says X" in m["content"] for m in client.calls[1])   # result fed back
 
 
-def test_agent_answers_immediately_without_tools():
-    client = FakeClient(["T1 is always-on per the snapshot."])
+def test_agent_answers_without_tools_after_one_nudge():
+    """A direct answer from grounded context alone still reaches the operator.
+
+    The CONTRACT here is unchanged and still asserted: the loop may answer
+    without retrieving. What changed is the price — M107 costs one nudge before
+    an evidence-free reply is accepted, because `parse_directive is None` alone
+    could not tell a real answer from a preamble announcing work never done.
+    This test previously pinned `len(calls) == 1`, and that assertion was the
+    one protecting the defect: it required the first directive-less reply to be
+    returned verbatim, which is exactly what shipped a fabricated investigation.
+    """
+    client = FakeClient(["T1 is always-on per the snapshot."] * 3)
     out = _agent(client).investigate("is T1 up?")
     assert "always-on" in out
-    assert len(client.calls) == 1                       # no tool round-trips
+    assert len(client.calls) == 3                       # reply, nudged reply, synthesis
 
 
 def test_agent_bounds_iterations_and_forces_answer(monkeypatch):
@@ -92,9 +102,15 @@ def test_agent_bounds_iterations_and_forces_answer(monkeypatch):
 
 
 def test_agent_rejects_unknown_tool_without_executing():
+    # M107: the forged tool never executes, so `gathered` stays empty and the
+    # plain reply that follows is evidence-free — it costs one nudge before it is
+    # accepted. The contract asserted below (never executed, told "not available")
+    # is unchanged; only the turn count moved.
     client = FakeClient([
         'RETRIEVE: {"tool": "delete_everything", "query": "rm -rf"}',
-        "Understood — I will only read.",
+        "Understood — I will only read.",   # evidence-free -> nudged
+        "Understood — I will only read.",   # still bare -> break to synthesis
+        "Understood — I will only read.",   # the synthesis call's answer
     ])
     out = _agent(client).investigate("can you delete?")
     assert "only read" in out
@@ -237,6 +253,7 @@ def test_agent_duplicate_forged_tool_trips_anti_thrash(monkeypatch):
         'RETRIEVE: {"tool": "rm_rf", "query": "a"}',
         'RETRIEVE: {"tool": "rm_rf", "query": "a"}',   # exact duplicate forged tool
         "ok I will only read",
+        "ok I will only read",   # M107: evidence-free, so one nudge before accepted
     ])
     out = _agent(client).investigate("q")
     assert "only read" in out
@@ -258,3 +275,93 @@ def test_agent_can_call_doctrine_search_tool(monkeypatch):
     assert "pgvector" in out
     # the tool result was fed back into the second model turn
     assert any("pgvector on :5433" in m["content"] for m in client.calls[1])
+
+
+# ── M107 · a reply that is not an answer must not be served as one ──────────────
+# `parse_directive(out) is None` was the WHOLE terminal condition, so any prose
+# ended the investigation and was returned to the operator verbatim. Observed
+# live on the autonomous path (M104): "I'll investigate this systematically. Let
+# me start by checking the exec journal" was written to report.md as the finished
+# investigation. This is the same seam on the INTERACTIVE path, where the output
+# goes straight to the operator's screen instead of a file.
+#
+# The replacement is M104's, ported: a reply with no directive is terminal only
+# when EVIDENCE stands behind it (a tool ran this loop) or it has already
+# survived one nudge. Deliberately mechanical — no prose heuristic tries to
+# recognise a preamble, because "does this look like an answer" is exactly the
+# judgement a model is worst at and a test cannot pin. The loop simply spends one
+# more turn and lets the next reply settle it.
+
+_PREAMBLE = "I'll investigate this systematically. Let me start by checking the journal."
+
+
+def test_a_preamble_is_not_served_as_the_investigation(monkeypatch):
+    """The defect itself: an announcement of work never done, returned as the answer."""
+    monkeypatch.setattr(R, "search_vault",
+                        lambda q, k=5: [R.Snippet("L3", "f", "f §1", 0.1, "journal says X")])
+    client = FakeClient([
+        _PREAMBLE,
+        'RETRIEVE: {"tool": "search_vault", "query": "journal"}',
+        "The journal shows X. [f §1]",
+    ])
+    out = _agent(client).investigate("what does the journal say?")
+    assert out != _PREAMBLE, (
+        "a reply that merely ANNOUNCED a retrieval was served as the finished "
+        "investigation — the operator is told work happened that never did"
+    )
+    assert "journal shows X" in out, out
+
+
+def test_the_ungrounded_nudge_names_the_missing_retrieval(monkeypatch):
+    """The nudge must say what is wrong mechanically (no RETRIEVE was issued, no
+    tool has run), not merely re-ask the question."""
+    client = FakeClient([_PREAMBLE, "Direct answer: T1 is up.", "Direct answer: T1 is up."])
+    _agent(client).investigate("is T1 up?")
+    assert len(client.calls) >= 2, "no second turn was taken — the loop accepted the preamble"
+    nudge = " ".join(m["content"] for m in client.calls[1])
+    assert "RETRIEVE" in nudge and _PREAMBLE in nudge, (
+        "the model was not told it issued no RETRIEVE, or its own reply was not "
+        "carried back into the transcript:\n" + nudge[-400:]
+    )
+
+
+def test_a_genuine_direct_answer_survives_the_nudge():
+    """The fix must not swallow legitimate direct answers — the loop is allowed to
+    answer from grounded context alone, it just has to mean it."""
+    client = FakeClient(["T1 is always-on per the snapshot."] * 3)
+    out = _agent(client).investigate("is T1 up?")
+    assert "always-on" in out, out
+
+
+def test_an_answer_with_evidence_behind_it_terminates_at_once(monkeypatch):
+    """Once a tool HAS run this loop, a plain answer is terminal immediately — the
+    nudge must not cost a turn on every answered investigation."""
+    monkeypatch.setattr(R, "search_vault",
+                        lambda q, k=5: [R.Snippet("L3", "f", "f §1", 0.1, "hit")])
+    client = FakeClient([
+        'RETRIEVE: {"tool": "search_vault", "query": "x"}',
+        "Answer grounded in the hit. [f §1]",
+    ])
+    out = _agent(client).investigate("why X?")
+    assert "grounded in the hit" in out
+    assert len(client.calls) == 2, (
+        f"an answer standing on gathered evidence was nudged anyway "
+        f"({len(client.calls)} calls) — the nudge is for UNGROUNDED replies only"
+    )
+
+
+def test_still_ungrounded_after_one_nudge_goes_to_synthesis(monkeypatch):
+    """Told once and still no directive: stop nudging and synthesize. A loop that
+    nudged forever would spend the whole budget re-asking (M104's other half)."""
+    client = FakeClient([_PREAMBLE, _PREAMBLE, "Final synthesized answer."])
+    out = _agent(client, max_steps=4).investigate("what happened?")
+    assert out == "Final synthesized answer.", out
+    assert len(client.calls) == 3, (
+        f"expected preamble, nudged preamble, then ONE synthesis call; "
+        f"got {len(client.calls)}"
+    )
+    synth = " ".join(m["content"] for m in client.calls[-1])
+    assert "RETRIEVE:" not in synth, (
+        "the synthesis call still offered the retrieval affordance, so the model "
+        "can keep retrieving instead of answering"
+    )

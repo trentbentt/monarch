@@ -108,10 +108,17 @@ def create_app(out_dir: Path, token: str, profile: str = "eval") -> FastAPI:
 
 
 import os  # noqa: E402
+import secrets  # noqa: E402
 
-# Module-level app for `uvicorn server:app`. serve.sh sets these env vars.
+# Module-level app for `uvicorn server:app`. serve.sh sets these env vars — but
+# `_check()` compares by equality, and os.environ.get(..., "") used to default
+# an UNSET token to "", which a request that also omits ?token= matches ("" ==
+# ""): every route silently ran unauthenticated. `or secrets.token_urlsafe(16)`
+# fails CLOSED instead — a run without REALMIC_TOKEN gets a real, unguessable
+# token nobody was told, not an open door. serve.sh already mints one this way;
+# this is the same fallback for the path that bypasses it.
 app = create_app(
     Path(os.environ.get("REALMIC_OUT", HERE.parent / "realmic_eval")),
-    os.environ.get("REALMIC_TOKEN", ""),
+    os.environ.get("REALMIC_TOKEN") or secrets.token_urlsafe(16),
     os.environ.get("REALMIC_PROFILE", "eval"),
 )

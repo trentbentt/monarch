@@ -49,6 +49,45 @@ def test_routing_defensive_on_empty():
     assert len(r["components"]) == 3
 
 
+def _state_three_tiers_one_silent():
+    """t1 served traffic, t2 reported a genuine zero, t3 never reported at all."""
+    return {
+        "tiers": {
+            "t1": {"performance": {"completions_in_window": 5, "errors_in_window": 2}},
+            "t2": {"performance": {"completions_in_window": 0, "errors_in_window": 0}},
+            "t3": {"performance": {}},
+        },
+    }
+
+
+def test_routing_traffic_meta_separates_unreported_from_idle():
+    r = derive_routing(_state_three_tiers_one_silent())
+    # t2 is idle and t3 is silent; both are absent from recent_traffic, so the
+    # list alone cannot tell them apart — the counts are what distinguishes them.
+    assert [t["tier"] for t in r["recent_traffic"]] == ["t1"]
+    assert r["traffic_meta"] == {
+        "tiers_total": 3,
+        "tiers_reporting": 2,      # t1 and t2 reported completions_in_window; t3 did not
+        "errors_reporting": 2,     # same for errors_in_window
+    }
+
+
+def test_routing_traffic_meta_counts_a_field_reported_by_nobody():
+    """errors_in_window absent everywhere is not every tier reporting zero errors."""
+    state = {"tiers": {
+        "t1": {"performance": {"completions_in_window": 4}},
+        "t2": {"performance": {"completions_in_window": 0}},
+    }}
+    r = derive_routing(state)
+    assert r["traffic_meta"]["tiers_reporting"] == 2
+    assert r["traffic_meta"]["errors_reporting"] == 0
+
+
+def test_routing_traffic_meta_on_empty_state():
+    r = derive_routing({})
+    assert r["traffic_meta"] == {"tiers_total": 0, "tiers_reporting": 0, "errors_reporting": 0}
+
+
 def test_pending_enriched_with_ledger_and_veto_countdown():
     out = enrich_pending(_state_with_pending())
     assert len(out) == 2

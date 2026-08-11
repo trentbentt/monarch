@@ -6,6 +6,17 @@
   --ok: var(--vital);
   --warn: var(--caution);
   --crit: var(--alert);
+
+  /* Atlas material — hi/lo gradient stops, derived from the real
+     .atlas-node--{status} stroke hues below (~12% lighter / ~12% darker,
+     same hue+saturation, so the overall color reads unchanged). */
+  --st-ok-hi: #3eaa7c;      --st-ok-lo: #1e503a;      /* base #2e7d5b */
+  --st-warn-hi: #d0a654;    --st-warn-lo: #856525;    /* base #b58932 */
+  --st-fail-hi: #c96c6c;    --st-fail-lo: #883232;    /* base #b54343 */
+  --st-drift-hi: #e8be72;   --st-drift-lo: #c1871f;   /* base #e0a63d */
+  --st-unknown-hi: #777c99; --st-unknown-lo: #404355; /* base #5a5f78 */
+  /* dormant has no hue today (opacity .45, dashed stroke) — desaturated slate */
+  --st-dormant-hi: #6c7389; --st-dormant-lo: #363a45;
 }
 
 * { box-sizing: border-box; }
@@ -232,7 +243,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var
 .au-detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* confirm modal */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+/* Above the terminal dock (70): a confirm gate is the one surface that must
+   never be occluded — you cannot approve what you cannot see. */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 80; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; max-width: 480px; width: 100%; }
 .modal-title { margin: 0 0 6px; font-size: 16px; }
 .modal-danger { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 5px; margin-bottom: 12px; }
@@ -243,6 +256,18 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var
 .mp-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .mp-code { font-family: ui-monospace, monospace; font-size: 12px; color: #9fd0ff; word-break: break-all; }
 .mp-err { color: var(--crit); }
+/* Irreversible acknowledgement — deliberately not styled as a quiet aside. It
+   is a gate, so it reads at alert weight and cannot be skimmed past. */
+.modal-ack {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 12px; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--crit) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--crit) 10%, transparent);
+  font-size: 13px; color: var(--frost); cursor: pointer;
+}
+.modal-ack input { margin: 2px 0 0; flex: none; accent-color: var(--crit); cursor: pointer; }
+
 .modal-ok { color: var(--ok); font-size: 13px; margin-bottom: 10px; }
 .modal-fail { color: var(--crit); font-size: 13px; margin-bottom: 10px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
@@ -256,3 +281,436 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var
 @media (min-width: 980px) {
   .grid-section, .attention-section { }
 }
+
+/* Layout lives on the container so N pills sit in a row instead of stacking on
+   one coordinate. top/right use max() against the iOS safe-area insets: with
+   viewport-fit=cover, an un-inset value paints under the status bar. */
+.nav-pills { position: fixed; z-index: 40; display: flex; gap: 8px;
+  align-items: center;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right)); }
+/* Appearance only — no position. Safe to wear anywhere, including inside the
+   Atlas bar, where it flows as a normal flex item. */
+.atlas-link { padding: 6px 12px; border-radius: 999px; background: rgba(20,24,38,.8);
+  color: #cfd8ff; text-decoration: none; font-size: 13px;
+  border: 1px solid rgba(120,140,255,.35); }
+.atlas-link:hover { background: rgba(40,48,76,.9); }
+
+.atlas { padding: 16px 20px; color: #dfe6ff; min-height: 100vh; }
+.atlas-bar { display: flex; gap: 16px; align-items: baseline; }
+.atlas-bar h1 { margin: 0; font-size: 20px; }
+.atlas-back { color: #9fb2ff; text-decoration: none; }
+.atlas-zoom button { background: none; border: 1px solid #44508a; color: #cfd8ff;
+  border-radius: 999px; padding: 3px 12px; margin-right: 6px; cursor: pointer; }
+.atlas-zoom button.on { background: #2c3766; }
+.atlas-probed { opacity: .6; font-size: 12px; margin-left: auto; }
+.atlas-stale { color: #ffb454; font-size: 12px; }
+.atlas-skeleton { display: grid; gap: 12px; margin-top: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.atlas-chip { text-align: left; padding: 14px 16px; border-radius: 12px;
+  background: rgba(22,27,45,.85); border: 1px solid #333e6b; cursor: pointer; }
+.atlas-chip-title { display: block; font-size: 15px; color: #eef2ff; }
+.atlas-chip-counts { font-size: 12px; opacity: .7; }
+.atlas-chip--ok { border-color: #2e7d5b; }
+.atlas-chip--warn { border-color: #b58932; }
+.atlas-chip--fail { border-color: #b54343; }
+.atlas-chip--drift { border-color: #e0a63d; box-shadow: 0 0 8px rgba(224,166,61,.3); }
+
+.atlas-band-title { fill: #9fb2ff; font-size: 13px; letter-spacing: .08em; }
+.atlas-band-rule { stroke: #333e6b; stroke-width: 1; }
+.atlas-edge { fill: none; stroke: #55639c; stroke-width: 1.5; opacity: .7; }
+.atlas-edge--control { stroke-dasharray: 6 4; }
+.atlas-edge--fallback { stroke-dasharray: 2 4; opacity: .5; }
+.atlas-node rect { fill: rgba(22,27,45,.9); stroke: #3a4677; cursor: pointer; }
+.atlas-node--ok rect { stroke: #2e7d5b; }
+.atlas-node--warn rect { stroke: #b58932; }
+.atlas-node--fail rect { stroke: #b54343; }
+.atlas-node--drift rect { stroke: #e0a63d; }
+.atlas-node--dormant rect { opacity: .45; stroke-dasharray: 4 3; }
+.atlas-node--unknown rect { stroke: #5a5f78; }
+.atlas-node-title { fill: #eef2ff; font-size: 13px; pointer-events: none; }
+.atlas-node-sub { fill: #8a93b8; font-size: 11px; pointer-events: none; }
+.atlas-drift-badge { fill: #e0a63d; font-size: 11px; }
+.atlas-deep-link { fill: #9fb2ff; font-size: 14px; cursor: pointer; }
+
+.atlas-drawer { position: fixed; right: 0; top: 0; bottom: 0; width: 320px;
+  background: rgba(14,17,30,.97); border-left: 1px solid #333e6b;
+  padding: 20px; overflow-y: auto; z-index: 50; }
+.atlas-drawer-close { float: right; background: none; border: none;
+  color: #9fb2ff; font-size: 20px; cursor: pointer; }
+.atlas-drawer-evidence { list-style: none; padding: 0; font-size: 12px; }
+.atlas-drawer-evidence li[data-ok="false"] { color: #ffb454; }
+.atlas-drawer-actions button { display: block; width: 100%; margin: 6px 0;
+  padding: 8px; border-radius: 8px; border: 1px solid #44508a;
+  background: #222b4d; color: #dfe6ff; cursor: pointer; }
+.atlas-drawer-actions button.danger { border-color: #b54343; }
+
+/* atlas Phase B: search */
+.atlas-search { background: rgba(22,27,45,.85); border: 1px solid #44508a;
+  color: #dfe6ff; border-radius: 999px; padding: 4px 14px; font-size: 13px;
+  width: 200px; }
+.atlas-search:focus { outline: none; border-color: #7f8fdc; }
+.atlas-search::placeholder { color: #6a739c; }
+.atlas-node--hit rect { stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(159,178,255,.55)); }
+.atlas-node--dim { opacity: .22; }
+.atlas-chip--hit { border-color: #7f8fdc; box-shadow: 0 0 8px rgba(127,143,220,.35); }
+
+/* atlas Phase B: flow mode */
+.atlas-flow-toggle { background: none; border: 1px solid #44508a; color: #cfd8ff;
+  border-radius: 999px; padding: 3px 12px; cursor: pointer; font-size: 13px; }
+.atlas-flow-toggle.on { background: #1d3a4d; border-color: #7fd0ff; color: #7fd0ff; }
+.atlas-edge--flow { stroke-dasharray: 8 6;
+  animation: atlas-flow-dash 1.2s linear infinite; }
+.atlas-edge--traced { stroke: #7fd0ff; opacity: 1; stroke-width: 2.5; }
+.atlas-edge--dim { opacity: .12; }
+.atlas-node--root rect { stroke: #7fd0ff; stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px rgba(127,208,255,.5)); }
+@keyframes atlas-flow-dash { to { stroke-dashoffset: -28; } }
+@media (prefers-reduced-motion: reduce) {
+  .atlas-edge--flow { animation: none; }
+}
+
+/* atlas Phase B: phone-readable skeleton (zoom 0 only) */
+.atlas-organ-list { list-style: none; margin: 6px 0 0; padding: 8px 12px;
+  background: rgba(14,17,30,.8); border: 1px solid #2b3560; border-radius: 10px;
+  font-size: 13px; }
+.atlas-organ-list li { display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 0; border-bottom: 1px dotted #2b3560; }
+.atlas-organ-list li:last-child { border-bottom: none; }
+.atlas-dot { width: 9px; height: 9px; border-radius: 50%; flex: none;
+  align-self: center; background: #5a5f78; }
+.atlas-dot--ok { background: #2e7d5b; }
+.atlas-dot--warn { background: #b58932; }
+.atlas-dot--fail { background: #b54343; }
+.atlas-dot--drift { background: #e0a63d; box-shadow: 0 0 5px rgba(224,166,61,.6); }
+.atlas-dot--dormant { background: #3a4677; }
+.atlas-organ-title { color: #eef2ff; }
+.atlas-organ-sub { color: #8a93b8; font-size: 11px; }
+.atlas-organ-drift { color: #ffb454; font-size: 11px; margin-left: auto; }
+@media (max-width: 640px) {
+  .atlas { padding: 12px; }
+  .atlas-bar { flex-wrap: wrap; row-gap: 6px; }
+  .atlas-skeleton { grid-template-columns: 1fr; gap: 10px; }
+  .atlas-chip { padding: 16px; }   /* larger touch target */
+}
+
+/* Atlas B′ — cells */
+.atlas-node--cell rect { stroke-dasharray: 3 2; opacity: 0.92; }
+.atlas-cells-badge { font-size: 10px; cursor: pointer; user-select: none; }
+.atlas-cells-badge.cells-ok { fill: #2e7d5b; }
+.atlas-cells-badge.cells-drift, .atlas-cells-badge.cells-warn { fill: #e0a63d; }
+.atlas-cells-badge.cells-fail { fill: #b54343; }
+.atlas-cells-badge.cells-unknown, .atlas-cells-badge.cells-dormant { fill: #5a5f78; }
+
+/* Atlas B′ — Loki pane */
+.atlas-loki { position: fixed; right: 0; top: 0; bottom: 0; width: 380px;
+  max-width: 90vw; display: flex; flex-direction: column;
+  background: rgba(14,17,30,.97); border-left: 1px solid #333e6b;
+  z-index: 60; }
+/* The panel is fixed to top:0, so its header needs the status-bar inset too —
+   otherwise its × lands on the battery/wifi glyphs (same root cause as the
+   nav pills). */
+.atlas-loki-head { display: flex; justify-content: space-between;
+  align-items: center;
+  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+  border-bottom: 1px solid #333e6b; }
+.atlas-loki-head button { background: none; border: none; color: #9fb2ff;
+  font-size: 18px; cursor: pointer; }
+.atlas-ask-loki { display: block; width: 100%; margin: 8px 0;
+  padding: 8px; border-radius: 8px; border: 1px solid #7fd0ff;
+  background: #1d3a4d; color: #7fd0ff; cursor: pointer; }
+/* G16: open a shell where this node's code lives. Color is set explicitly —
+   a button never inherits it, and the UA default is black on this panel. */
+.atlas-work-here { display: block; width: 100%; margin: 8px 0;
+  padding: 8px; border-radius: 8px; border: 1px solid #8ad9a0;
+  background: #1d3d2b; color: #8ad9a0; cursor: pointer; text-align: left; }
+.atlas-work-here:hover { border-color: #b6ecc5; }
+
+/* spine-B7: prepared-ask card */
+.pending-evidence { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.pending-plan { font-size: 11px; background: rgba(10,13,24,.7); border: 1px solid #2b3560;
+  border-radius: 8px; padding: 8px 10px; margin: 6px 0; white-space: pre-wrap; color: #aeb9e8; }
+
+/* spine-B8: ask convergence on Atlas */
+.atlas-ask-badge { fill: #7fd0ff; font-size: 11px; }
+.atlas-drawer-ask { border-top: 1px solid #333e6b; margin-top: 12px; padding-top: 10px; }
+.atlas-drawer-ask h3 { margin: 0 0 4px; font-size: 14px; color: #7fd0ff; }
+.atlas-drawer-plan { font-size: 11px; background: rgba(10,13,24,.7);
+  border: 1px solid #2b3560; border-radius: 8px; padding: 8px 10px;
+  white-space: pre-wrap; color: #aeb9e8; }
+
+/* spine-B9: daily digest card */
+.digest-summary { font-size: 13px; color: #cfd8ff; margin-bottom: 6px; }
+.digest-lines { list-style: none; padding: 0; font-size: 12px; opacity: .85; }
+.digest-lines li { padding: 2px 0; border-bottom: 1px dotted #2b3560; }
+
+/* Atlas C1 — mission composer */
+.atlas-mission { position: fixed; right: 0; top: 0; bottom: 0; width: 400px;
+  max-width: 92vw; display: flex; flex-direction: column; z-index: 41;
+  background: var(--panel, #0f172a); border-left: 1px solid var(--edge, #1e293b); }
+.atlas-mission-head { display: flex; justify-content: space-between;
+  align-items: center; padding: 10px 14px;
+  border-bottom: 1px solid var(--edge, #1e293b); }
+.atlas-mission-lanes { display: flex; gap: 6px; padding: 10px 14px 0; }
+.atlas-mission-lanes .on { outline: 1px solid var(--accent, #7dd3fc); }
+.atlas-mission-form { display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; }
+.atlas-mission-answer { overflow: auto; white-space: pre-wrap; }
+.atlas-mission-note { opacity: 0.7; font-size: 12px; }
+
+/* Atlas C3a — embedded terminal pane. Fill-parent since the terminal-dock
+ * spec (2026-07-21): the ONLY consumer is now the global TerminalDock,
+ * which owns fixed positioning and width. */
+.atlas-terminal { flex: 1; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--panel, #0f172a); }
+.atlas-terminal-head { display: flex; justify-content: space-between;
+  align-items: center; padding: 10px 14px; gap: 10px;
+  border-bottom: 1px solid var(--edge, #1e293b); }
+.atlas-terminal-title { font-size: 12px; color: #9fb2ff; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.atlas-terminal-actions { display: flex; gap: 6px; flex: none; }
+.atlas-terminal-actions button { padding: 4px 10px; border-radius: 6px;
+  border: 1px solid #44508a; background: #222b4d; color: #dfe6ff;
+  cursor: pointer; font-size: 12px; }
+.atlas-terminal-actions button.danger { border-color: #b54343; }
+.atlas-terminal-error { margin: 0; padding: 6px 14px; font-size: 12px;
+  color: #ffb454; border-bottom: 1px solid var(--edge, #1e293b); }
+.atlas-terminal-host { flex: 1; padding: 6px; }
+
+/* ── Global terminal dock (terminal-dock spec 2026-07-21) ───────────
+   Stacking (G16): the dock out-ranks every page-level right-edge panel
+   (.atlas-drawer 50, .atlas-loki 60), because "Work on this" opens it FROM
+   one of those panels — at 43 the shell you just asked for appeared behind
+   the thing you clicked. Only the ConfirmModal (80) sits above it: an
+   authority gate must never be occluded by a shell. */
+.dock-tab { position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+  z-index: 71; padding: 10px 8px; border-radius: 10px 0 0 10px;
+  border: 1px solid #44508a; border-right: none; background: #14183099;
+  color: #cfd8ff; cursor: pointer; font-size: 15px;
+  backdrop-filter: blur(6px); }
+.dock-tab:hover { background: #222b4d; }
+.terminal-dock { position: fixed; right: 0; top: 0; bottom: 0;
+  display: flex; flex-direction: column; z-index: 70;
+  background: var(--panel, #0f172a);
+  border-left: 1px solid var(--edge, #1e293b);
+  box-shadow: -12px 0 32px rgba(0,0,0,.45); }
+.terminal-dock.dock-hidden { display: none; }
+.dock-resize { position: absolute; left: -3px; top: 0; bottom: 0;
+  width: 7px; cursor: col-resize; z-index: 1; }
+.dock-resize:hover { background: rgba(125,211,252,.25); }
+.dock-notice { display: flex; justify-content: space-between;
+  align-items: center; gap: 10px; padding: 8px 14px;
+  background: rgba(181,67,67,.15); border-bottom: 1px solid #b54343;
+  color: #ffb454; font-size: 13px; }
+.dock-notice button { background: none; border: none; color: #ffb454;
+  font-size: 16px; cursor: pointer; }
+/* G16: which node this shell was opened for — the cwd alone doesn't say it. */
+.dock-scope { display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 14px; border-bottom: 1px solid #2a3154; }
+.dock-scope-node { font-weight: 600; font-size: 13px; }
+.dock-start { display: flex; flex-direction: column; gap: 8px;
+  padding: 16px; }
+.dock-session, .dock-new { display: block; width: 100%; text-align: left;
+  padding: 8px 12px; border-radius: 8px; border: 1px solid #44508a;
+  background: #222b4d; color: #dfe6ff; cursor: pointer; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-new { border-style: dashed; }
+.dock-session:hover, .dock-new:hover:not(:disabled) { border-color: #7fd0ff; }
+
+/* Atlas C3a Task 5 — phone tail */
+.atlas-terminal-tail { position: fixed; right: 0; left: 0; bottom: 0;
+  max-height: 45vh; margin: 0; overflow: auto; padding: 10px 14px;
+  background: rgba(8,10,18,.95); border-top: 1px solid #333e6b;
+  color: #cfd8ff; font-size: 12px; white-space: pre-wrap; z-index: 42; }
+
+/* ── Atlas W: world view ─────────────────────────────────────────── */
+.world { position: fixed; inset: 0; display: flex; flex-direction: column; }
+.world-head { display: flex; align-items: center; gap: 14px; padding: 10px 16px; }
+.world-head h1 { font-size: 16px; margin: 0; }
+.world-search { flex: 0 1 260px; }
+.world-fallback { margin: auto; max-width: 420px; text-align: center; opacity: .85; }
+.world-loading { display: grid; place-items: center; height: 100%; opacity: .7; }
+.world-canvas { flex: 1; }
+
+/* ── Flowchart material language (spec 2026-07-21) ───────────────── */
+.atlas-stop-hi { stop-opacity: 1; }
+.atlas-stop-lo { stop-opacity: 1; }
+/* status stops — hues match the existing .atlas-node--{status} rect
+   strokes above 1:1; --st-*-hi/-lo are defined on :root. */
+.atlas-stop--ok.atlas-stop-hi      { stop-color: var(--st-ok-hi); }
+.atlas-stop--ok.atlas-stop-lo      { stop-color: var(--st-ok-lo); }
+.atlas-stop--drift.atlas-stop-hi   { stop-color: var(--st-drift-hi); }
+.atlas-stop--drift.atlas-stop-lo   { stop-color: var(--st-drift-lo); }
+.atlas-stop--dormant.atlas-stop-hi { stop-color: var(--st-dormant-hi); }
+.atlas-stop--dormant.atlas-stop-lo { stop-color: var(--st-dormant-lo); }
+.atlas-stop--fail.atlas-stop-hi    { stop-color: var(--st-fail-hi); }
+.atlas-stop--fail.atlas-stop-lo    { stop-color: var(--st-fail-lo); }
+.atlas-stop--warn.atlas-stop-hi    { stop-color: var(--st-warn-hi); }
+.atlas-stop--warn.atlas-stop-lo    { stop-color: var(--st-warn-lo); }
+.atlas-stop--unknown.atlas-stop-hi { stop-color: var(--st-unknown-hi); }
+.atlas-stop--unknown.atlas-stop-lo { stop-color: var(--st-unknown-lo); }
+
+.atlas-node rect { filter: url(#atlas-glow); }
+.atlas-band-zone { fill: rgba(255,255,255,0.02); }
+/* Every edge is arrowed, so the head must take that edge's own stroke —
+   base slate, traced cyan, lens accent — instead of painting all of them
+   accent. `context-stroke` does exactly that; the first declaration is the
+   fallback for engines that don't support it. Markers scale with
+   stroke-width (markerUnits defaults to strokeWidth), so thin base edges
+   get proportionally small heads and lens edges get bold ones for free. */
+.atlas-arrow-head { fill: var(--accent, #6fb1ff); fill: context-stroke; }
+
+/* .atlas-node--dim / .atlas-edge--dim already defined above (Phase B:
+   search + flow mode) and are reused as-is for lens dimming — not
+   redeclared here to avoid a second, conflicting opacity value. */
+
+/* lens path: bright nodes, source ring, animated directional edges */
+.atlas-node--lens        { opacity: 1; }
+.atlas-node--lens-source rect { stroke: var(--accent, #6fb1ff); stroke-width: 2; }
+.atlas-edge--lens {
+  stroke: var(--accent, #6fb1ff);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 6;
+  animation: atlas-flow 1s linear infinite;
+  animation-delay: calc(var(--seq, 0) * 0.25s);
+}
+@keyframes atlas-flow { to { stroke-dashoffset: -12; } }
+
+/* A hop the story traverses against the wiring: the arrowhead moves to the
+   path start (marker-start), so the dashes must travel that way too —
+   otherwise motion and arrow would disagree and the hop reads ambiguous. */
+.atlas-edge--lens-rev { animation-name: atlas-flow-rev; }
+@keyframes atlas-flow-rev { to { stroke-dashoffset: 12; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-edge--lens, .atlas-edge--lens-rev { animation: none; }
+}
+
+.atlas-lens-bar, .atlas-depth { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.atlas-lens, .atlas-depth-btn {
+  font-size: 12px; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--line, #33404d); background: transparent; cursor: pointer;
+  color: var(--text, #cfd8ff);   /* buttons never inherit — UA default is black on this dark panel */
+}
+.atlas-lens.on, .atlas-depth-btn.on {
+  background: var(--accent, #6fb1ff); color: #0b0f14; border-color: var(--accent, #6fb1ff);
+}
+.atlas-lens-caption { font-size: 12px; opacity: 0.8; margin: 2px 0 6px; }
+
+/* Skeleton expand-in-place (desktop + phone). The row is a button so it can
+   open the drawer; strip the UA button chrome so it still reads as a list. */
+.atlas-organ-row { display: flex; align-items: baseline; gap: 8px; width: 100%;
+  padding: 6px 8px; background: none; border: none; border-radius: 8px;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.atlas-organ-row:hover { background: rgba(120,140,255,.10); }
+.atlas-band-open { margin: 6px 0 2px 8px; padding: 4px 10px; border-radius: 999px;
+  background: none; border: 1px solid #44508a; color: #9fb2ff;
+  font-size: 12px; cursor: pointer; }
+.atlas-band-open:hover { background: #2c3766; }
+
+.atlas-drawer-sources { list-style: none; margin: 6px 0; padding: 0;
+  display: flex; flex-direction: column; gap: 3px; }
+.atlas-drawer-sources code { font-size: 11px; color: #9fb2ff;
+  background: rgba(10,13,24,.7); border: 1px solid #2b3560;
+  border-radius: 6px; padding: 2px 6px; }
+
+.dock-unpaired { margin: 8px 0; padding: 8px 10px; border-radius: 8px;
+  background: rgba(217,161,59,.12); border: 1px solid rgba(217,161,59,.45);
+  color: #e8c07a; font-size: 12px; line-height: 1.45; }
+
+.world-legend { position: fixed; left: 16px; z-index: 30;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  list-style: none; margin: 0; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(14,17,30,.82); border: 1px solid #2b3560;
+  border-radius: 10px; font-size: 11px; color: #aeb9e8; }
+.world-legend li { display: flex; align-items: center; gap: 6px; }
+.world-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+/* Desktop auto-update (G7): subtle post-intro "update staged" note. */
+.cc-update-note {
+  position: fixed;
+  right: 12px;
+  bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink, #111) 82%, transparent);
+  color: var(--paper, #eee);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* Manual update check (M50): same corner chrome as the note, but interactive
+   — the note above is pointer-events:none, this must not be. */
+.cc-update-check {
+  position: fixed;
+  right: 12px;
+  bottom: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 40;
+}
+.cc-update-check-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.14));
+  background: color-mix(in srgb, var(--ink, #111) 70%, transparent);
+  color: var(--paper, #eee);
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.cc-update-check-btn:hover { opacity: 0.95; }
+.cc-update-check-btn:disabled { opacity: 0.35; cursor: default; }
+.cc-update-check-note {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink, #111) 82%, transparent);
+  color: var(--paper, #eee);
+  opacity: 0.85;
+}
+
+/* Build stamp (Control panel): what is actually running, on both ends. */
+.build-stamp {
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--hairline, rgba(255, 255, 255, 0.08));
+  font-size: 0.72rem;
+  line-height: 1.5;
+  font-family: var(--mono, ui-monospace, monospace);
+  opacity: 0.75;
+}
+.build-row { display: flex; gap: 0.6rem; }
+.build-k { min-width: 3.7rem; opacity: 0.6; }
+.build-v { min-width: 3.2rem; }
+.build-sha { opacity: 0.7; }
+.build-verdict { margin-top: 0.3rem; }
+.build-ok .build-verdict { color: var(--ok, #6ee7a8); }
+.build-warn .build-verdict { color: var(--warn, #f5c451); }
+
+/* Unpaired (401) — distinct from the unreachable banner: the box is UP. */
+.unpaired-banner { border-left: 3px solid var(--warn, #f5c451); }
+
+/* Update install failed — louder than the staged note, because it is permanent
+   until a human reinstalls (silent failure = a forever-stale app). */
+.cc-update-failed {
+  color: var(--warn, #f5c451);
+  border: 1px solid color-mix(in srgb, var(--warn, #f5c451) 40%, transparent);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  max-width: 46ch;
+  line-height: 1.45;
+}
+
+/* Suppressed read-gate denial volume — one line, not fifteen rows. */
+.audit-note { opacity: 0.6; margin: 0.25rem 0 0.5rem; line-height: 1.4; }
+
+/* Pre-console pairing gate: a fresh client under the armed read-gate has no
+   overview, so the console never mounts — this is the only place it can pair. */
+.loading-pair { max-width: 34rem; margin: 0 auto; padding: 1.5rem 1rem; }
+.loading-pair .control-panel { margin-top: 1rem; text-align: left; }
+.loading-pair-hint { opacity: 0.75; margin: 0.5rem 0 0; }

@@ -31,7 +31,7 @@ import subprocess
 
 from ..schema import ActionTier, BURST_TIERS, MONARCH_TIERS
 from ..listeners.tier_health import _slots_active_count
-from .base import Action
+from .base import Action, _http_ok
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ _EVICT_TIMEOUT_SEC = 30
 
 class EvictIdleBurstTier(Action):
     action_id   = "evict_idle_burst_tier"
+    action_class = "service-lifecycle"
     description = "Evict an idle burst tier (T2/T6) GPU→down to reclaim VRAM under §10.3 pressure (cascade rung before T1 offload)"
     default_tier = ActionTier.TIER_3     # strict cold-start (§9.5.2)
     target_tier  = ActionTier.TIER_2     # §10.3: eviction is a standard autonomous-with-log action
@@ -112,3 +113,17 @@ class EvictIdleBurstTier(Action):
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
         logger.error("[action:evict] %s failed (rc=%d): %s", tier, proc.returncode, " | ".join(tail))
         return "failed"
+
+    def verify(self, params: dict) -> str:
+        """Eviction succeeded when the burst is OFF the port — down = success,
+        so verify inverts the health probe."""
+        tier = params.get("tier")
+        if tier not in _ALLOWED_TIERS:
+            return "failed"
+        port = MONARCH_TIERS[tier].port
+        return "ok" if not _http_ok(f"http://127.0.0.1:{port}/health", timeout=3.0) else "failed"
+
+    def plan(self, params: dict) -> str:
+        tier = params.get("tier")
+        return (f"run ~/bin/{tier}-down (SIGTERM→SIGKILL teardown + idle-marker write) → "
+                f"verify port no longer serving → rollback: ~/bin/{tier}-up brings it back")

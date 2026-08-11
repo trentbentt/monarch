@@ -155,6 +155,37 @@ def _ram_ecc() -> Tuple[str, Optional[int], Optional[int], Optional[str]]:
     return ("errors" if (ce or ue) else "ok"), ce, ue, None
 
 
+def _apply_health(model, gpu, thermal, disk_status, disk_detail,
+                  ecc_status, ce, ue, notes, now) -> None:
+    """Write one poll's readings into model.hardware.health.
+
+    M73: the gpu block gets its OWN updated_at, written in the same branch as
+    the readings it vouches for. The block-level h.updated_at stays
+    unconditional — disk and ECC always yield a measured status (including
+    'unavailable') — so it cannot vouch for the gpu leg: a dead nvidia-smi
+    would keep it fresh while the gpu numbers froze, and the sampler's
+    staleness gate could never fire. A failed read must not stamp
+    updated_at (process.py's host-resources rule).
+    """
+    h = model.hardware.health
+    g = h.gpu
+    if gpu:
+        g.temperature_c = gpu["temperature_c"]
+        g.fan_percent = gpu["fan_percent"]
+        g.utilization_percent = gpu["utilization_percent"]
+        g.power_watts = gpu["power_watts"]
+        g.memory_used_mb = gpu["memory_used_mb"]
+        g.updated_at = now
+    g.thermal_state = thermal
+    h.disk_smart = disk_status
+    h.disk_detail = disk_detail
+    h.ram_ecc_status = ecc_status
+    h.ram_ecc_correctable = ce
+    h.ram_ecc_uncorrectable = ue
+    h.updated_at = now
+    h.notes = notes
+
+
 class HardwareListener(BaseListener):
     name = "hardware"
     interval_sec = 30.0
@@ -183,25 +214,9 @@ class HardwareListener(BaseListener):
         if enote:
             notes.append(f"ram: {enote}")
 
-        def update(model):
-            h = model.hardware.health
-            g = h.gpu
-            if gpu:
-                g.temperature_c = gpu["temperature_c"]
-                g.fan_percent = gpu["fan_percent"]
-                g.utilization_percent = gpu["utilization_percent"]
-                g.power_watts = gpu["power_watts"]
-                g.memory_used_mb = gpu["memory_used_mb"]
-            g.thermal_state = thermal
-            h.disk_smart = disk_status
-            h.disk_detail = disk_detail
-            h.ram_ecc_status = ecc_status
-            h.ram_ecc_correctable = ce
-            h.ram_ecc_uncorrectable = ue
-            h.updated_at = now
-            h.notes = notes
-
-        store.apply(update)
+        store.apply(lambda model: _apply_health(
+            model, gpu, thermal, disk_status, disk_detail,
+            ecc_status, ce, ue, notes, now))
 
         # GPU thermal transitions (coarse state gives natural hysteresis).
         if thermal != self._last_thermal:

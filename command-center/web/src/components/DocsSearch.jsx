@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiFetch } from "../control.js";
 
 /** "Where's the doc for X" — searches the L6 vault Truth corpus. */
 export default function DocsSearch() {
@@ -11,7 +12,7 @@ export default function DocsSearch() {
     if (!q.trim()) return;
     setBusy(true);
     try {
-      const r = await fetch(`/api/docs/search?q=${encodeURIComponent(q)}`);
+      const r = await apiFetch(`/api/docs/search?q=${encodeURIComponent(q)}`);
       setRes(await r.json());
     } catch {
       setRes({ results: [] });

@@ -95,3 +95,13 @@ button.ic-cell:hover { border-color: var(--hairline-strong); }
 
 /* keyboard focus — brass, deliberate */
 .ic-card :focus-visible, button.ic-cell:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: var(--r-sm); }
+
+/* The sentence register — what the numbers MEAN, in English. Sits between the
+   card's readings and its detail. Body-weight, not caption-weight: this is
+   content, not an annotation. */
+.ic-sentence {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--frost);
+}

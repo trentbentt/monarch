@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { getToken, setToken, clearToken, verifyToken, fetchAudit, isSessionOnly } from "../control.js";
+import { getToken, setToken, clearToken, verifyToken, fetchAudit, isSessionOnly, setPersistence } from "../control.js";
+import { BUILD_SHA, BUILD_VERSION, DESKTOP_VERSION, syncState } from "../buildinfo.js";
+import BuildStamp from "./BuildStamp.jsx";
 
 /** Control pairing (token) + substrate actuators + audit trail. */
 export default function ControlPanel({ openConfirm }) {
@@ -8,11 +10,32 @@ export default function ControlPanel({ openConfirm }) {
   const [msg, setMsg] = useState("");
   const [audit, setAudit] = useState([]);
   const [sessionOnly, setSessionOnly] = useState(isSessionOnly());
+  const [serverBuild, setServerBuild] = useState(null);
+  const [readDenials, setReadDenials] = useState(0);
 
-  const refreshAudit = () => fetchAudit(15).then((d) => setAudit(d.audit || []));
+  const refreshAudit = () => fetchAudit(15).then((d) => {
+    setAudit(d.audit || []);
+    setReadDenials(d.read_denials || 0);
+  });
 
   useEffect(() => {
-    if (getToken()) verifyToken(getToken()).then((ok) => { setPaired(ok); if (ok) refreshAudit(); });
+    if (getToken()) verifyToken(getToken()).then((ok) => {
+      setPaired(ok);
+      if (ok) { refreshAudit(); setSessionOnly(isSessionOnly()); }
+    });
+    // Ungated on purpose — the build stamp must render even when this client is
+    // unpaired or stale, which is exactly when you need to read it.
+    //
+    // The sha goes UP because only the server holds the repo and can turn it
+    // into a distance from HEAD (M49). Sent by every client, not just the
+    // desktop one: the value is the caller's own build identity, and one code
+    // path here is worth more than a branch that only the harder-to-test client
+    // exercises. Encoded because it reaches a subprocess argument on the far
+    // side — the server allowlists it to hex, and this is the second lock.
+    fetch(`/api/version?client_sha=${encodeURIComponent(BUILD_SHA)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setServerBuild)
+      .catch(() => setServerBuild(null));
   }, []);
 
   const pair = async () => {
@@ -73,7 +96,23 @@ export default function ControlPanel({ openConfirm }) {
             <button className="docs-btn ghost" onClick={unpair}>Unpair</button>
           </div>
 
+          <label className="control-session-only" title="Off = the token is kept across launches on this device. On = wiped when you close the app, so a lost phone retains nothing — but you re-paste it every launch.">
+            <input
+              type="checkbox"
+              checked={sessionOnly}
+              onChange={(e) => { setSessionOnly(e.target.checked); setPersistence(e.target.checked); }}
+            />
+            Keep token only for this session (re-paste each launch)
+          </label>
+
           <h3 className="qh">Recent control actions</h3>
+          {readDenials > 0 && (
+            <div className="audit-note t-caption">
+              {readDenials} denied read{readDenials === 1 ? "" : "s"} in the log
+              (unpaired clients hitting the read-gate) — hidden here so they
+              don't bury actual actions.
+            </div>
+          )}
           {audit.length === 0 ? (
             <div className="q-empty">no actions yet</div>
           ) : (
@@ -89,6 +128,8 @@ export default function ControlPanel({ openConfirm }) {
           )}
         </>
       )}
+
+      <BuildStamp serverBuild={serverBuild} />
     </section>
   );
 }

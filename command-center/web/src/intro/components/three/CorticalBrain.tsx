@@ -8,8 +8,22 @@ import { useBrainActivityData } from "@/hooks/useBrainActivityData";
 import { useBrainShader } from "@/hooks/useBrainShader";
 import { useBrainEntrance } from "@/hooks/useBrainEntrance";
 
-useGLTF.preload("/brain-assets/brain_lh.glb");
-useGLTF.preload("/brain-assets/brain_rh.glb");
+// (useDraco, useMeshopt) are BOTH false, at every call site, deliberately.
+//
+// drei wires a Draco loader and a Meshopt decoder into every GLTFLoader by
+// default (Gltf.js:14/21), and the Meshopt decoder instantiates its wasm the
+// moment the loader is built. Under the dashboard's `script-src 'self'` that
+// throws a CompileError on every first visit — M157. Both meshes here declare
+// extensionsUsed: [] and extensionsRequired: [], so neither decoder has
+// anything to decode: the wasm was pure cost, and the honest fix is to not ask
+// for it rather than to widen the policy for a capability nothing uses.
+//
+// If a mesh here is ever re-exported WITH meshopt or draco compression, these
+// flags must change AND web/e2e/csp-wasm.e2e.test.mjs has to be re-reasoned —
+// at that point the capability stops being dead weight and the trade is real.
+// The useGLTF calls below carry the same flags; they must not drift apart.
+useGLTF.preload("/brain-assets/brain_lh.glb", false, false);
+useGLTF.preload("/brain-assets/brain_rh.glb", false, false);
 
 const ACTIVATION_LERP = 0.03;
 const FLOW_LERP = 0.08;
@@ -29,8 +43,9 @@ export function CorticalBrain({ stage, progress }: CorticalBrainProps) {
   const entranceComplete = useRef(false);
   const depthPrePassRef = useRef<THREE.Mesh>(null);
 
-  const lhGltf = useGLTF("/brain-assets/brain_lh.glb");
-  const rhGltf = useGLTF("/brain-assets/brain_rh.glb");
+  // Same (useDraco, useMeshopt) as the preloads above — see the note there.
+  const lhGltf = useGLTF("/brain-assets/brain_lh.glb", false, false);
+  const rhGltf = useGLTF("/brain-assets/brain_rh.glb", false, false);
 
   const { merged } = useBrainActivityData(lhGltf.scene, rhGltf.scene);
   const { brainMaterial, customUniforms, restingEmissive } = useBrainShader(lhGltf.scene);

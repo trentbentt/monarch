@@ -36,6 +36,41 @@ does **not** re-declare those models — it passes domain dicts through and adds
 thin derived `Overview`. The spine is `~/.local/state/loki/state.json`
 (rewritten every 10s); `loki-q` is the secondary surface.
 
+## The workbench (G16)
+
+Any node you can research, you can work on — from the same page.
+
+A deep-dive's **Act** section (directly below Tests, where the gaps show) and the
+Atlas node drawer both offer:
+
+- **⌨ Work on this** — opens the terminal dock on a shell **in that node's repo**.
+  It is a plain login shell: you run `claude` yourself. Nothing is pre-typed and
+  nothing auto-runs.
+- **⧉ Ask Loki** — narrows the deep-dive's docked supervisor from the whole
+  section to that one node (read-and-propose; it answers, it does not act).
+- **⌘ Act on this** — jumps to `#/anatomy/<node-id>`, the node's Atlas drawer,
+  where registered actions and the mission composer run through the audited
+  ConfirmModal flow. There is exactly one write surface and this isn't it.
+
+G16 adds **no new authority** — it composes seams that already existed. Desktop
+only (the terminal dock doesn't exist on phone). A node with no `sources` in the
+topology keeps Ask-Loki and Act-on-this but has no shell to open.
+
+**Requires `CC_MISSION_REPOS`.** "Work on this" resolves the node's repo key (the
+part before the `:` in its `sources`) against that allow-list; **raw paths are
+never accepted**. If the key isn't allow-listed the server answers 400 and the
+dock falls back to a vault-root shell with a notice naming the missing key. Set
+it on the service unit — **single-quote the whole assignment**, or systemd strips
+the inner double quotes, the JSON no longer parses, and the allow-list silently
+becomes empty:
+
+```ini
+Environment='CC_MISSION_REPOS={"command-center":"/home/operator/projects/command-center","loki":"/home/operator/projects/loki"}'
+```
+
+There is a rehearsed installer for this at
+`vault/_artifacts/operator-apply-mission-repos_2026-07-22/`.
+
 ## Security
 
 Browser talks only to FastAPI. Bearer-keyed services (Hermes, LiteLLM, n8n,

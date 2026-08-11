@@ -7,11 +7,17 @@
    coarse (touch) pointer with no hover.
 
    Two independent axes — deliberately kept separate:
-     • viewport width  (≤600px → phone-portrait layout & density)
+     • viewport width  (≤640px → phone-portrait layout & density)
      • input modality  ((hover:none)+(pointer:coarse) → touch affordances)
    A touch laptop shouldn't get the phone layout; a narrow desktop window
    shouldn't lose its hover affordances. Everything derives from tokens.css —
    no new palette or type.
+
+   BREAKPOINT: 640px must stay in lockstep with `usePhone()` (hooks/usePhone.js),
+   which is the JS side of the same decision — it drives skeleton-only Atlas, the
+   suppressed terminal dock, and the hidden 3D world link. This file was 600px
+   while usePhone was 640px, so 601–640px viewports got phone BEHAVIOUR with the
+   desktop LAYOUT. usePhone.js is the source of truth; mirror it here.
    ========================================================================== */
 
 /* ── Safe areas ─────────────────────────────────────────────────────────────
@@ -20,7 +26,7 @@
    scroll/edge containers by the device insets (max() keeps a sane floor when an
    inset is 0, e.g. landscape or non-notch). */
 @supports (padding: max(0px)) {
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .console-main {
       padding-left:   max(var(--s4), env(safe-area-inset-left));
       padding-right:  max(var(--s4), env(safe-area-inset-right));
@@ -48,8 +54,8 @@
   }
 }
 
-/* ── Phone-portrait layout (≤600px; iPhone 14 = 390px) ──────────────────────── */
-@media (max-width: 600px) {
+/* ── Phone-portrait layout (≤640px; iPhone 14 = 390px) ──────────────────────── */
+@media (max-width: 640px) {
   /* Force a single column. NB: the shell's ≤1200px rule targets
      `.console.chat-collapsed` (specificity 0-2-0), which outranks its own ≤768px
      `.console {1fr}` (0-1-0) — so on a phone with the chat collapsed (the
@@ -132,7 +138,7 @@
    The desktop body is `content | 420px supervisor`. On a phone that fixed dock
    overflows the 390px viewport, so collapse to one scrolling column: content
    first, the scoped supervisor stacked beneath with usable height. */
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .deepdive { height: 100dvh; }
   .dv-head { gap: var(--s2); padding-left: var(--s4); padding-right: var(--s4); }
   .dv-title { font-size: 19px; }

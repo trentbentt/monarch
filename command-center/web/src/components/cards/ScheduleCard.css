@@ -36,3 +36,6 @@
 .schedule-stale-body { color: var(--muted); }
 .schedule-stale-lead { color: var(--frost); }
 .schedule-stale-names { color: var(--caution); }
+
+/* Source unreadable — same visual weight as the stale-entry note. */
+.schedule-degraded { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; }

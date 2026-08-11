@@ -22,6 +22,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import { shouldNotify, buildNotification } from "./notifyRules.js";
+import { getToken } from "../control.js";
 
 let started = false;
 
@@ -47,7 +48,10 @@ export async function startNativeNotifier() {
     let es;
     try {
       // EventSource is rewritten to the absolute backend by apiBase.js.
-      es = new EventSource("/api/stream");
+      // EventSource can't set headers, so the read-gate accepts the token as a
+      // query param (server: require_read_token_sse) — sent only when one is set.
+      const t = getToken();
+      es = new EventSource(t ? `/api/stream?token=${encodeURIComponent(t)}` : "/api/stream");
     } catch {
       setTimeout(connect, 5000);
       return;

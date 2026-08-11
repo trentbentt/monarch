@@ -33,6 +33,12 @@ LEDGER_PATH = Path(os.environ.get(
     Path.home() / ".local/state/loki/authority.json",
 ))
 
+# The block's own first line, named once. `client.py` finds the grounded block in
+# an outgoing message list by this heading in order to hand it to the reply checks
+# (M199) — a second hand-copied literal there would rot silently the day this
+# wording changes, and the check would go quiet rather than red (M101).
+CONTEXT_HEADING = "# GROUNDED CONTEXT"
+
 # Canonical doctrine the supervisor may cite. Kept as a small, named index rather
 # than dumping whole files — the builder pulls a bounded head excerpt on request.
 DOCTRINE_FILES = {
@@ -43,6 +49,35 @@ DOCTRINE_FILES = {
 
 _DOCTRINE_EXCERPT_CHARS = 4000
 
+# Newest N entries of events.log to render. The event log is retention-bounded by
+# TIME (events.retention_hours), not by count, so it grows with the event RATE —
+# which means the grounded block is LARGEST exactly when the system is flapping,
+# i.e. exactly when the supervisor is being asked what is wrong. Measured
+# 2026-07-16 (agentbench #7): the log was 56 entries / 19,901 chars = 44.6% of
+# the whole state block, and the block itself was 52% of T1's context window.
+#
+# Capping the newest N is a bounded projection, not a lie: no FIELD is dropped,
+# only old rows of one time-series, and the omission is DISCLOSED in-band so the
+# model knows they exist and can ask. Same contract as the doctrine excerpt's
+# "…[truncated — ask to see more]".
+_EVENT_LOG_MAX = int(os.environ.get("LOKI_SUPERVISOR_EVENT_LOG_MAX", "20"))
+
+# live_state's share of T1's declared context window. The block must leave room
+# for the ledger, the action registry, retrieved evidence and the answer itself,
+# so it gets a named slice rather than "whatever it happens to be".
+#
+# This is the coupling that was missing (agentbench #7): the window is declared
+# in MONARCH_TIERS["t1"].context_size and NOTHING read it, so the fit was
+# arithmetic luck. Now the block is sized against the window it is fed into.
+_LIVE_STATE_SHARE = float(os.environ.get("LOKI_SUPERVISOR_STATE_SHARE", "0.35"))
+_CHARS_PER_TOKEN = 4          # generous; JSON tokenizes worse, so this errs small
+
+
+def _live_state_budget() -> int:
+    from ..schema import MONARCH_TIERS
+    return int(MONARCH_TIERS["t1"].context_size * _CHARS_PER_TOKEN
+               * _LIVE_STATE_SHARE)
+
 
 def load_state_snapshot() -> Optional[dict]:
     """Read-only system state. Returns the SystemModel as a plain dict (the LLM
@@ -52,6 +87,109 @@ def load_state_snapshot() -> Optional[dict]:
     if model is None:
         return None
     return json.loads(model.model_dump_json())
+
+
+def _live_state_block(snap: dict, budget: Optional[int] = None) -> str:
+    """Render the state snapshot to fit a declared slice of T1's context window.
+
+    Three budget decisions, in order of how much they cost the model:
+
+    1. **Compact separators.** `indent=2` on a deeply-nested snapshot spends ~30%
+       of its bytes on whitespace — 47,649 → 33,482 chars measured — for ZERO
+       information loss. The pretty-printing bought nothing and cost a third of
+       the block.
+    2. **Trim the event log, adaptively.** `events.log` is retention-bounded by
+       TIME, not count, so it grows with the event RATE: measured at 44.6% of the
+       block, and largest exactly when the system is flapping — i.e. exactly when
+       the supervisor is asked what is wrong. It is the only genuinely
+       runtime-unbounded series here, so it is the only thing trimmed, newest
+       first, and only as far as the budget requires.
+    3. **Disclose whatever was dropped.** Same contract as the doctrine excerpt's
+       "…[truncated — ask to see more]": the model is told what it is missing so
+       it can ask, rather than silently reasoning over a hole.
+
+    Everything else renders whole — every field the supervisor might cite is
+    still here. That is deliberate: this block exists to make grounding possible,
+    and a projection that drops a field the model needs turns "cite the snapshot"
+    into "confabulate the snapshot", which is the failure this file already has a
+    scar from (see load_ledger below).
+
+    If even a zero-event block exceeds budget, that is disclosed and logged too —
+    an over-budget block that says so beats one that silently overflows T1 and
+    gets its grounding truncated away by llama.cpp.
+    """
+    budget = _live_state_budget() if budget is None else budget
+
+    def render(snapshot: dict) -> str:
+        return json.dumps(snapshot, separators=(",", ":"), default=str)
+
+    events = snap.get("events")
+    log = events.get("log") if isinstance(events, dict) else None
+    total = len(log) if isinstance(log, list) else 0
+
+    shown, note, kept = dict(snap), "", total
+    if total:
+        # Newest-first ladder: take the largest cap that fits the budget.
+        for cap in (total, _EVENT_LOG_MAX, 10, 5, 0):
+            if cap > total:
+                continue
+            trial = dict(snap)
+            trimmed = dict(events)
+            trimmed["log"] = log[-cap:] if cap else []
+            trial["events"] = trimmed
+            shown, kept = trial, cap
+            if len(render(trial)) <= budget:
+                break
+        if kept < total:
+            note = (f"_showing the newest {kept} of {total} events (older omitted "
+                    f"to fit the context budget — ask if you need them). Every "
+                    f"other field is complete._\n")
+
+    # The health roster is the OTHER list that grows at runtime (with the number
+    # of monitored components). Give it the same bounded-projection treatment as
+    # the event log — first N, disclosed — but only once the block is still over
+    # budget after the events were trimmed. Events go first (cheapest to lose:
+    # old rows of a time series); the roster only if that was not enough.
+    health = shown.get("health")
+    comps = health.get("components") if isinstance(health, dict) else None
+    total_c = len(comps) if isinstance(comps, list) else 0
+    if total_c and len(render(shown)) > budget:
+        kept_c = total_c
+        for cap in (total_c, 20, 10, 5, 0):
+            if cap > total_c:
+                continue
+            trial = dict(shown)
+            h = dict(health)
+            h["components"] = comps[:cap]
+            trial["health"] = h
+            shown, kept_c = trial, cap
+            if len(render(trial)) <= budget:
+                break
+        if kept_c < total_c:
+            note += (f"_showing {kept_c} of {total_c} health components (rest "
+                     f"omitted to fit the context budget — ask if you need them). "
+                     f"Every other field is complete._\n")
+
+    blob = render(shown)
+    if len(blob) > budget:
+        # Last resort: even with both runtime-unbounded lists trimmed, a single
+        # oversized field still blows the budget. ENFORCE the window rather than
+        # merely disclose it — a bounded block that says it was cut beats one that
+        # silently overflows T1 and has its grounding truncated away by llama.cpp.
+        # This is the guarantee the headroom benchmark checks: len(block) <= budget
+        # for ANY snapshot, not just when the event log happens to be large.
+        over = len(blob) - budget
+        marker = ("\n…[state truncated to fit the context window — ask for "
+                  "specific fields]")
+        blob = blob[:max(0, budget - len(marker))] + marker
+        logger.warning(
+            "[supervisor] live_state block hard-capped to its %d-char budget "
+            "(%.0f%% of T1's window); the snapshot outgrew the window by %d chars "
+            "even with its lists trimmed",
+            budget, 100 * _LIVE_STATE_SHARE, over)
+        note += ("_note: the state block was truncated to fit the context window; "
+                 "ask for specific fields if you need them._\n")
+    return ("## live_state (state.json)\n" + note + "```json\n" + blob + "\n```\n")
 
 
 def load_ledger() -> List[dict]:
@@ -144,7 +282,7 @@ def build_context(question: Optional[str] = None,
     include_doctrine: optional list of DOCTRINE_FILES keys to inline verbatim.
     """
     parts: List[str] = []
-    parts.append("# GROUNDED CONTEXT (read fresh from disk this turn)\n"
+    parts.append(CONTEXT_HEADING + " (read fresh from disk this turn)\n"
                  "# Every claim you make about live state must trace to a value below.\n")
 
     snap = load_state_snapshot()
@@ -152,8 +290,7 @@ def build_context(question: Optional[str] = None,
         parts.append("## live_state\n(no state.json on disk yet — the daemon has not "
                      "written state. Say so; do not estimate live values.)\n")
     else:
-        parts.append("## live_state (state.json)\n```json\n"
-                     + json.dumps(snap, indent=2, default=str) + "\n```\n")
+        parts.append(_live_state_block(snap))
 
     parts.append("## authority_ledger (authority.json — trust tiers)\n```json\n"
                  + json.dumps(load_ledger(), indent=2, default=str) + "\n```\n")

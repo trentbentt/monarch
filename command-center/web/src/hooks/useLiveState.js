@@ -4,6 +4,21 @@ import { apiFetch, getToken } from "../control";
 const LAST_KEY = "cc:last-overview";
 
 /**
+ * Map a read response status to a connection state.
+ *
+ * 401 is its own state, not "offline". Under the armed read-gate
+ * (CC_REQUIRE_TOKEN_FOR_READS) an unpaired client 401s on every read — but a 401
+ * is proof monarch is UP and answering. Collapsing it into "offline" made the UI
+ * report a reachability failure ("the box may be down") for an authorization
+ * problem, and drove the reachability watchdog to push a false outage alert.
+ */
+export function connFromStatus(status) {
+  if (status >= 200 && status < 300) return "polling";
+  if (status === 401) return "unauthorized";
+  return "offline";
+}
+
+/**
  * Live connection to the backend.
  * - Primary: SSE /api/stream  ({overview, state} on every change)
  * - Fallback: poll /api/overview if SSE drops
@@ -46,7 +61,7 @@ export function useLiveState() {
             localStorage.setItem(LAST_KEY, JSON.stringify(ov));
             setConn("polling");
           } else {
-            setConn("offline");
+            setConn(connFromStatus(r.status));
           }
         } catch {
           setConn("offline");

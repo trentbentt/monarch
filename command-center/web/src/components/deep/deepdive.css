@@ -389,8 +389,11 @@
 .cb-hit-qn { font-size: 11px; color: var(--muted); }
 .cb-hit-code { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-mono); white-space: pre-wrap; word-break: break-word; }
 
-.rail-explore { margin-top: calc(-1 * var(--s3)); }
-.rail-link-dot-cyan { background: var(--glow-primary); box-shadow: 0 0 6px var(--brass-glow); }
+/* `.rail-explore` and `.rail-link-dot-cyan` used to live here. They style the
+   SHELL's side rail, not the deep-dive, and being here cost the cyan dot the
+   cascade: this file enters the module graph through App.jsx before main.jsx
+   imports shell.css, so shell.css's equal-specificity `.rail-link-dot` always
+   won. Both now live in design/shell.css beside the rest of the rail (M51). */
 
 /* ── Raw signal tab (reuses the kv-tree look from shell.css) ─────────────── */
 .raw-signal { max-height: none; padding-top: var(--s3); }
@@ -414,3 +417,96 @@
   .dv-head-right { grid-row: 1; }
   .dv-title { font-size: 20px; }
 }
+
+/* G3 — codebase graph (Obsidian-style 2D force graph) */
+.cb-graph { margin: 16px 0; }
+.cb-graph-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.cb-graph-counts { opacity: 0.7; }
+.cb-graph-legend { display: flex; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.cb-legend-item { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; opacity: 0.8; }
+.cb-legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.cb-graph-canvas { display: block; width: 100%; border: 1px solid rgba(140,170,220,0.18); border-radius: 10px;
+  background: radial-gradient(circle at 50% 40%, rgba(20,30,50,0.45), rgba(8,12,20,0.65)); }
+.cb-graph-canvas:active { cursor: grabbing !important; }
+.cb-graph-empty { padding: 20px; text-align: center; opacity: 0.7; }
+.cb-graph-hint { margin-top: 4px; opacity: 0.55; text-align: center; }
+
+/* G16 — the Act section (workbench): act on a node without leaving the page.
+   Buttons set their own color; a <button> never inherits it and the UA
+   default is black on these panels. */
+.dv-workbench-lede { margin: 0 0 10px; }
+.dv-workbench-row { display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; padding: 10px 0;
+  border-top: 1px solid rgba(140,170,220,0.18); }
+.dv-workbench-node { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dv-workbench-title { font-weight: 600; }
+.dv-workbench-repo { font-size: 0.78rem; opacity: 0.75; overflow-wrap: anywhere; }
+.dv-workbench-nosrc { opacity: 0.55; }
+.dv-workbench-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.dv-workbench-acts button { padding: 6px 10px; border-radius: 8px; cursor: pointer;
+  white-space: nowrap; font-size: 0.82rem;
+  border: 1px solid rgba(140,170,220,0.3); background: rgba(20,30,50,0.5); color: #cfe0ff; }
+.dv-workbench-acts button:hover { border-color: #7fd0ff; color: #eaf4ff; }
+.dv-workbench-acts .dv-work { border-color: rgba(138,217,160,0.45); color: #8ad9a0; }
+.dv-workbench-acts .dv-work:hover { border-color: #b6ecc5; color: #d6f5de; }
+
+/* G16 — the docked supervisor, narrowed from the section to one node. */
+.dv-dock-scope { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; padding: 6px 10px; border-bottom: 1px solid rgba(140,170,220,0.18); }
+.dv-dock-unscope { background: none; border: 0; cursor: pointer; font: inherit;
+  color: #7fd0ff; }
+.dv-dock-unscope:hover { text-decoration: underline; }
+
+/* Metric-gap register (#/deep/gaps) — the dashboard surfacing its own gaps. */
+.gaps-content { display: flex; flex-direction: column; gap: var(--s5); padding-top: var(--s4); }
+.gap-counts { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); list-style: none;
+  padding: 0; margin: 0; color: var(--muted); font-size: 12px; }
+.gap-counts li { white-space: nowrap; }
+.gap-dormant { color: var(--warn); }
+.gap-section { display: flex; flex-direction: column; gap: var(--s3); }
+.gap-chips { display: flex; flex-wrap: wrap; gap: var(--s2); list-style: none; padding: 0; margin: 0; }
+.gap-chip { padding: 3px 9px; border-radius: var(--r-sm); border: 1px solid var(--hairline);
+  font-size: 12px; }
+.gap-chip.is-gap { color: var(--crit); border-color: color-mix(in srgb, var(--crit) 45%, transparent); }
+.gap-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.gap-table th { text-align: left; color: var(--muted); font-weight: 500;
+  border-bottom: 1px solid var(--hairline); padding: 4px 10px; }
+.gap-table td { padding: 4px 10px; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 55%, transparent); }
+.gap-table tr:hover td { background: var(--panel-2); }
+.gap-domain { color: var(--muted); }
+/* the real machine job a curated node stands for; muted so the node id stays
+   the primary read, but present so the binding is never invisible */
+.gap-job { color: var(--muted); }
+.gap-cell { font-size: 11px; }
+.gap-cell.is-ok { color: var(--ok); }
+.gap-cell.is-gap { color: var(--crit); }
+.gap-cell.is-unknown { color: var(--muted); font-style: italic; }
+
+/* M54 — the metrics surface. The list had no styles at all: it rendered as a
+   bare <ul> because every node drew one server-chosen series and there was
+   nothing to lay out. The picker makes the row a control, so it needs to read
+   as one — an unstyled <select> renders as a white browser widget on this
+   shell and reads as broken chrome rather than an offered choice. */
+.dv-metric-list { list-style: none; margin: 0; padding: 0; }
+.dv-metric-row {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s2) 0; border-bottom: 1px solid var(--hairline);
+}
+.dv-metric-row > .t-caption { flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-metric-pick {
+  flex: 0 0 auto; max-width: 45%;
+  background: var(--panel-2); color: var(--muted);
+  border: 1px solid var(--hairline-strong); border-radius: 4px;
+  font: inherit; font-size: 11px; padding: 2px 6px; cursor: pointer;
+}
+.dv-metric-pick:hover { color: var(--brass); border-color: var(--brass-glow); }
+.dv-metric-pick:focus-visible { outline: 1px solid var(--brass); outline-offset: 1px; }
+/* the honest empty: a chosen series with no rows in this window is not the
+   same as an un-instrumented node, and must not borrow its sentence */
+.dv-metric-empty { color: var(--muted); font-style: italic; }
+
+/* Authority's deep-dive: the card's reading, then the record it no longer
+   carries on home (§10 step 5). */
+.dv-authority { display: flex; flex-direction: column; gap: var(--s3); }
+.dv-section-sub { color: var(--muted); font-weight: 400; }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getToken, setToken, clearToken, isSessionOnly } from "./control.js";
+import { getToken, setToken, clearToken, isSessionOnly, setPersistence } from "./control.js";
 
 // vitest runs in the node environment (no DOM), so stub the two Web Storage
 // areas with simple in-memory maps. sessionStorage is the one a real browser
@@ -113,5 +113,48 @@ describe("storage-mode default by shell (A2)", () => {
     expect(isSessionOnly()).toBe(true);
     clearToken();
     expect(isSessionOnly()).toBe(false);   // back to the desktop default
+  });
+});
+
+// Changing persistence used to require Unpair -> re-paste -> re-Pair, because
+// the checkbox only exists on the pairing form and that form hides once paired.
+// Worse, clearToken() drops the mode preference, so a re-pair silently defaults
+// back to session-only — you get one shot at the decision, on a form you cannot
+// return to. setPersistence makes it a setting instead of a pairing-time gamble.
+describe("setPersistence (change storage mode without re-pairing)", () => {
+  it("moves an existing token to localStorage when persistence is turned ON", () => {
+    setToken("tok-1", { sessionOnly: true });
+    expect(sessionStorage.getItem(TOKEN)).toBe("tok-1");
+
+    setPersistence(false); // false = not session-only = persist
+
+    expect(localStorage.getItem(TOKEN)).toBe("tok-1");
+    expect(sessionStorage.getItem(TOKEN)).toBe(null); // no duplicate left behind
+    expect(isSessionOnly()).toBe(false);
+    expect(getToken()).toBe("tok-1");
+  });
+
+  it("moves it back to sessionStorage when persistence is turned OFF", () => {
+    setToken("tok-2", { sessionOnly: false });
+    expect(localStorage.getItem(TOKEN)).toBe("tok-2");
+
+    setPersistence(true);
+
+    expect(sessionStorage.getItem(TOKEN)).toBe("tok-2");
+    expect(localStorage.getItem(TOKEN)).toBe(null); // never leave a copy at rest
+    expect(isSessionOnly()).toBe(true);
+  });
+
+  it("is a no-op with no token — never writes an empty credential", () => {
+    setPersistence(false);
+    expect(localStorage.getItem(TOKEN)).toBe(null);
+    expect(sessionStorage.getItem(TOKEN)).toBe(null);
+  });
+
+  it("survives a session wipe once persistence is on (the actual point)", () => {
+    setToken("tok-3", { sessionOnly: true });
+    setPersistence(false);
+    sessionStorage.clear();          // iOS suspending the PWA
+    expect(getToken()).toBe("tok-3"); // still paired after relaunch
   });
 });

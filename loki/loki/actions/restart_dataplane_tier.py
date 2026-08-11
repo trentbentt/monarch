@@ -27,8 +27,8 @@ import logging
 import os
 import subprocess
 
-from ..schema import ActionTier, CPU_DATAPLANE_TIERS
-from .base import Action
+from ..schema import ActionTier, CPU_DATAPLANE_TIERS, MONARCH_TIERS
+from .base import Action, _http_ok
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ _RESTART_TIMEOUT_SEC = 240
 
 class RestartCpuDataplaneTier(Action):
     action_id   = "auto_restart_cpu_dataplane_tier"
+    action_class = "service-lifecycle"
     description = "Restart a crashed zero-VRAM CPU dataplane tier (T3/T4/T5) via idempotent per-tier launch script"
     default_tier = ActionTier.TIER_3     # strict cold-start (§9.5.2)
     target_tier  = ActionTier.TIER_2     # caps at autonomous-with-log; never TIER_1 (would be user-invisible)
@@ -91,3 +92,19 @@ class RestartCpuDataplaneTier(Action):
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
         logger.error("[action:restart] %s failed (rc=%d): %s", tier, proc.returncode, " | ".join(tail))
         return "failed"
+
+    def verify(self, params: dict) -> str:
+        """External-observer confirmation: the relaunched tier answers /health.
+        (execute()'s "ok" only means the launch script exited 0.)"""
+        tier = params.get("tier")
+        if tier not in _ALLOWED_TIERS:
+            return "failed"
+        port = MONARCH_TIERS[tier].port
+        return "ok" if _http_ok(f"http://127.0.0.1:{port}/health", timeout=10.0) else "failed"
+
+    def plan(self, params: dict) -> str:
+        tier = params.get("tier")
+        port = MONARCH_TIERS[tier].port if tier in MONARCH_TIERS else "?"
+        return (f"run ~/bin/{tier}-up (idempotent single-tier relaunch) → "
+                f"verify http://127.0.0.1:{port}/health → rollback: none needed "
+                f"(tier was already down)")

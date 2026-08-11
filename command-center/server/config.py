@@ -36,6 +36,11 @@ API_KEYS_ENV = Path(_env("CC_API_KEYS_ENV", str(_HOME / ".config/inference/api_k
 HERMES_URL = _env("CC_HERMES_URL", "http://127.0.0.1:8642")
 LITELLM_URL = _env("CC_LITELLM_URL", "http://127.0.0.1:4000")
 N8N_URL = _env("CC_N8N_URL", "http://127.0.0.1:5678")
+# n8n Header-Auth shared secret (Atlas C2). Sent as X-CC-Webhook-Auth on every
+# workflow dispatch. When a workflow is allow-listed but this is empty, dispatch
+# refuses at validation (fail closed) — the Funnel webhook guardrail enforced
+# from the CC side too. Env only; never committed.
+N8N_WEBHOOK_TOKEN = _env("CC_N8N_WEBHOOK_TOKEN", "")
 EVERCORE_URL = _env("CC_EVERCORE_URL", "http://127.0.0.1:1995")
 
 # --- Phase 2 legibility sources ---------------------------------------------
@@ -90,6 +95,8 @@ REQUIRE_TOKEN_FOR_READS = _env("CC_REQUIRE_TOKEN_FOR_READS", "0") in ("1", "true
 # Actuator scripts (idempotent partial-offload / restore — §10.3).
 T1_OFFLOAD_BIN = _env("CC_T1_OFFLOAD_BIN", str(_HOME / "bin/t1-offload"))
 T1_RESTORE_BIN = _env("CC_T1_RESTORE_BIN", str(_HOME / "bin/t1-restore"))
+# Bench-gated daemon reload (system-review W2) — dispatched detached (Atlas B).
+LOKI_RELOAD_BIN = _env("CC_LOKI_RELOAD_BIN", str(_HOME / "bin/loki-reload"))
 # n8n workflow trigger allow-list: JSON object {name: "webhook/path"} (empty by
 # default — operator opts specific workflows in). Closed enum, no arbitrary URLs.
 import json as _json  # noqa: E402
@@ -116,3 +123,62 @@ PUSH_INTERRUPT_TYPES = set(
         "gpu_thermal_critical,security_alert,spend_burst,ram_exhaustion",
     ).split(",")
 )
+
+# Loki exec journal (autonomy spine Phase A) — read-only for digest/ask surface.
+EXEC_JOURNAL_PATH = Path(_env(
+    "CC_EXEC_JOURNAL_PATH",
+    str(Path.home() / ".local/state/loki/exec_journal.jsonl")))
+
+# Loki escalation brief store (spine Phase C) — read-only for the digest.
+ESCALATIONS_DIR = Path(_env(
+    "CC_ESCALATIONS_DIR",
+    str(Path.home() / ".local/state/loki/escalations")))
+
+# Morning digest local fire time (design: ~07:30 cron-equivalent).
+DIGEST_HOUR = int(_env("CC_DIGEST_HOUR", "7"))
+DIGEST_MINUTE = int(_env("CC_DIGEST_MINUTE", "30"))
+
+# Per-event brief push (M4). Kinds listed here push one notification per brief
+# at scan time; every other kind is shadow-recorded only (§S.4: a false alarm
+# is more expensive than a missed chart — promotion is an env edit made against
+# the shadow record). test-drift ships promoted: onset-keyed since M19, tiny
+# measured cardinality, and it is M4's motivating example.
+PUSH_BRIEF_KINDS = {
+    k.strip()
+    for k in _env("CC_PUSH_BRIEF_KINDS", "test-drift").split(",")
+    if k.strip()
+}
+BRIEF_PUSH_POLL_S = int(_env("CC_BRIEF_PUSH_POLL_S", "60"))
+BRIEF_PUSH_MAX_ATTEMPTS = int(_env("CC_BRIEF_PUSH_MAX_ATTEMPTS", "5"))
+# M93: the deploy-day baseline EXPIRES. It was filed in _FINAL beside pushed and
+# gave_up, so a brief merely present at the first scan was excluded from the
+# event channel for as long as it stayed open — and records are pruned only on
+# close, so the mute lasted exactly as long as the problem. 24h because the
+# 07:30 digest is the daily channel and already names open briefs: a brief that
+# outlives one full digest cycle has been reported once and not resolved, which
+# is the point at which persistence is itself the news. Draining is capped per
+# scan so an expired backlog cannot deliver the flood the baseline prevents;
+# the remainder defers (unrecorded) to the next scan rather than being dropped.
+BRIEF_BASELINE_GRACE_H = float(_env("CC_BRIEF_BASELINE_GRACE_H", "24"))
+BRIEF_BASELINE_DRAIN_MAX = int(_env("CC_BRIEF_BASELINE_DRAIN_MAX", "2"))
+# M35: a promoted-kind brief the operator was paged about ALSO announces its
+# close ("recovered", severity info) — healthy is a signal, not an inference
+# from silence. Ships on by operator directive 2026-08-01; volume is bounded
+# by the failure pushes themselves (at most one recovery per pushed brief),
+# and kinds never pushed still close silently.
+PUSH_RECOVERY = _env("CC_PUSH_RECOVERY", "1").strip().lower() not in (
+    "0", "false", "no", "")
+BRIEF_PUSH_STATE_PATH = Path(_env(
+    "CC_BRIEF_PUSH_STATE_PATH",
+    str(Path.home() / ".local/state/command-center/brief-push-state.json")))
+
+# --- Atlas C3a: embedded Claude Code terminal --------------------------------
+# Allow-listed repos for terminal cwd: JSON {"key": "/abs/path"}. Raw paths
+# never accepted anywhere; the default (no key) is the vault root.
+try:
+    MISSION_REPOS = _json.loads(_env("CC_MISSION_REPOS", "{}"))
+except ValueError:
+    MISSION_REPOS = {}
+TERMINAL_IDLE_MIN: int = int(_env("CC_TERMINAL_IDLE_MIN", "60"))
+TERMINAL_CAP: int = int(_env("CC_TERMINAL_CAP", "2"))
+

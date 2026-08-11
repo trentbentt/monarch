@@ -2,6 +2,14 @@
 // inside the Tauri desktop shell (no-op in the browser PWA).
 import "./runtime/apiBase.js";
 
+// Reload once when a new service worker takes control. registerType
+// "autoUpdate" generated only a bare register() call — nothing implemented
+// the update half — so a new worker parked forever and shipped fixes never
+// reached the phone. sw.js now activates immediately; this brings the PAGE
+// onto the matching bundle instead of leaving old JS against a new cache.
+import { installSwReload } from "./runtime/swReload.js";
+installSwReload();
+
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
@@ -35,4 +43,15 @@ if (typeof window !== "undefined" && window.__TAURI_INTERNALS__) {
   import("./runtime/nativeNotify.js")
     .then((m) => m.startNativeNotifier())
     .catch(() => {});
+
+  // Desktop auto-update (G7 + M50): deferred so it never competes with the
+  // intro's first paint / three.js chunk. Checks at launch AND on a standing
+  // interval — the app is chrome the operator leaves open for days, and a
+  // once-per-launch check meant "next launch" never came and a long-lived
+  // session never updated. Downloads + installs silently and applies on the
+  // NEXT launch — the running session and its intro are untouched.
+  const _kickUpdate = () =>
+    import("./runtime/desktopUpdate.js").then((m) => m.default()).catch(() => {});
+  if ("requestIdleCallback" in window) requestIdleCallback(_kickUpdate);
+  else setTimeout(_kickUpdate, 4000);
 }

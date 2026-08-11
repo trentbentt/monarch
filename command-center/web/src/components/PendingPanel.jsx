@@ -42,6 +42,14 @@ export default function PendingPanel({ pending, openConfirm }) {
               {!p.blocking && <VetoCountdown expiresAt={p.expires_at} />}
             </div>
             {p.rationale && <div className="pending-why"><b>Why:</b> {p.rationale}</div>}
+            {p.evidence && Object.keys(p.evidence).length > 0 && (
+              <div className="pending-evidence">
+                {Object.entries(p.evidence).map(([k, v]) => (
+                  <span key={k} className="chip chip-muted">{k}: {String(v)}</span>
+                ))}
+              </div>
+            )}
+            {p.plan && <pre className="pending-plan">{p.plan}</pre>}
             <div className="pending-meta">
               {p.ledger_state && <span>trust: {p.ledger_state}</span>}
               {p.current_tier != null && p.target_tier != null && (

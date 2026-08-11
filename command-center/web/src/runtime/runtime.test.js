@@ -6,7 +6,7 @@ import {
   buildNotification,
   parseHHMM,
 } from "./notifyRules.js";
-import { isReachabilityAlerting } from "./reachability.js";
+import { isReachabilityAlerting, isOutageState } from "./reachability.js";
 
 const BASE = "https://host.example-tailnet.ts.net:8443";
 
@@ -148,5 +148,22 @@ describe("notifyRules helpers", () => {
       title: "Monarch · spend_burst",
       body: "critical event on T3",
     });
+  });
+});
+
+describe("reachability.isOutageState", () => {
+  it("reachable states are not an outage", () => {
+    expect(isOutageState("live")).toBe(false);
+    expect(isOutageState("polling")).toBe(false);
+  });
+
+  it("offline IS an outage — the box could not be reached at all", () => {
+    expect(isOutageState("offline")).toBe(true);
+  });
+
+  it("unauthorized is NOT an outage — monarch answered 401, it is up", () => {
+    // Without this the watchdog starts its clock on an unpaired client and
+    // pushes "can't reach monarch" about a perfectly healthy box (G8 fallout).
+    expect(isOutageState("unauthorized")).toBe(false);
   });
 });

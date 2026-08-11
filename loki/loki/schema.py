@@ -22,6 +22,7 @@ cardinal decisions — this layer observes reality regardless of doctrine.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from typing import Any, Dict, List, Optional
@@ -127,6 +128,11 @@ class GPUTelemetry(BaseModel):
     power_watts: Optional[float]       = None
     memory_used_mb: Optional[int]      = None
     thermal_state: str                 = "unknown"  # ok | warn | critical | unknown
+    # M73: the block's OWN freshness stamp — written only when nvidia-smi
+    # actually answered. HardwareHealth.updated_at refreshes every poll (disk
+    # and ECC always yield a measured status), so it cannot vouch for these
+    # fields; readers of the gpu block gate on THIS stamp, never the parent's.
+    updated_at: Optional[datetime]     = None
 
 class HardwareHealth(BaseModel):
     """Live host hardware telemetry (hardware.py listener). Distinct from the
@@ -308,6 +314,13 @@ class Schedule(BaseModel):
     collisions: List[Collision]      = Field(default_factory=list)
     stale_entries: List[str]         = Field(default_factory=list)
     cron_updated_at: Optional[datetime] = None
+    # Why a read FAILED, one entry per unreadable source. Non-empty means the
+    # other cron_* lists are UNKNOWN rather than empty — an unreadable source
+    # must never render as a clean board. (It did: `crontab` is setgid and the
+    # daemon runs with RestrictSUIDSGID, so 13 real jobs surfaced as 0 for
+    # months behind a "0 missed / 0 collisions" card.) Additive with a default
+    # so an existing state.json still validates.
+    cron_source_errors: List[str]    = Field(default_factory=list)
 
 
 # ─── Quotas ───────────────────────────────────────────────────────────────────
@@ -455,6 +468,11 @@ class ProposedAction(BaseModel):
     # autonomy a rule earned. (§9.5 — the supervisor is a proposal source, never
     # an authority.)
     origin: str = "rule"
+    # Autonomy spine (Phase A): structured trigger evidence captured by the
+    # rule at propose time (snapshot values that justified the proposal).
+    # Copied onto the PendingAsk so the approve/decline surface shows WHY,
+    # not just WHAT.
+    evidence: Dict[str, Any] = Field(default_factory=dict)
 
 class ActionRecord(BaseModel):           # ledger row (canonical store = authority.json)
     action_id: str
@@ -462,6 +480,12 @@ class ActionRecord(BaseModel):           # ledger row (canonical store = authori
     current_tier: ActionTier = ActionTier.TIER_3
     target_tier: ActionTier  = ActionTier.TIER_2     # promotion cap (seed = TIER_2)
     clean_run_count: int = 0             # consecutive clean runs at current tier
+    # Phase D tenure clock: when the CURRENT clean streak began (stamped on the
+    # 0→1 transition, cleared on any reset). Eligibility needs the streak to be
+    # both long (N=12) and OLD (≥ TRUST_TENURE_DAYS) — 12 clean runs in one
+    # flappy night must not read as earned trust. Legacy rows hydrate None and
+    # are not eligible until a fresh streak stamps the clock.
+    streak_started_at: Optional[datetime] = None
     total_runs: int = 0
     last_fired: Optional[datetime] = None
     last_outcome: Optional[str] = None   # "ok" | "failed" | "regretted"
@@ -479,6 +503,10 @@ class PendingAsk(BaseModel):
     expires_at: Optional[datetime] = None   # non-blocking deadline; gate default-proceeds at timeout
     origin: str = "rule"                 # carries ProposedAction.origin so the engine/gate keep
                                          # non-rule asks blocking + out of the trust ladder
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    # Prepared-action text (what will run, how it's verified, rollback) built
+    # by Action.plan() at dispatch. The CC ask card (Phase B) renders this.
+    plan: Optional[str] = None
 
 class Decisions(BaseModel):
     pending_asks: List[PendingAsk] = Field(default_factory=list)
@@ -601,7 +629,7 @@ MONARCH_TIERS: Dict[str, TierConfig] = {
     "t4": TierConfig(
         tier_id="t4", enabled=True,
         model="Phi-4-mini", quant="Q4_K_M",
-        context_size=16384, parallelism_np=4, port=8002, cpu_only=True,
+        context_size=16384, parallelism_np=2, port=8002, cpu_only=True,
         # 2026-06-16: CPU-resident (validation gate is the only consumer; grader
         # calls are short/async). Frees ~4.2 GB VRAM for T1/T2/T6. See §5.4.
     ),
@@ -642,6 +670,16 @@ BURST_TIERS: tuple[str, ...] = tuple(
 # process.py (emits the warning), rules.py (suppresses the proposal), and
 # authority.py (forces Tier 3 on a flapping tier).
 FLAP_THRESHOLD_24H = 3
+
+# Phase D graduation gates (§9.5.2 hardening). TRUST_TENURE_DAYS: a promotion
+# additionally needs the clean streak to be at least this OLD — trust must be
+# earned across real operational variety, not one flappy night.
+# SERVICE_FLAP_THRESHOLD_24H: this many exec-journal rows for the SAME
+# service-lifecycle action in 24h means the SERVICE is flapping (even three
+# successful respawns in a day — success of the respawn is not health of the
+# component); the gate suppresses further proposals and writes a brief.
+TRUST_TENURE_DAYS = 14
+SERVICE_FLAP_THRESHOLD_24H = 3
 
 # ─── D4 role → model mapping (P2-2 role-key indirection, 2026-06-10) ──────────
 # Quota rows, cascade doctrine (§9.4/§9.5.4), and quota.py's spend-log
@@ -696,6 +734,27 @@ ROLE_MODELS: Dict[str, Dict[str, Any]] = {
     "coder_local": {"provider": "local", "model": "qwen-coder-deep",
                     "period": "monthly", "budget_usd": None,
                     "api_metered": False, "litellm_models": (), "quota_row": False},
+    # Escalation rung-2 (spine Phase C, design §6) — the nightly brief-runner's
+    # ledgered lane. OUTSIDE the Quota Cascade (never a routing input): the
+    # runner refuses to start when this row is exhausted, so the monthly budget
+    # is the hard worst-case bound on autonomous investigation spend.
+    "glm_escalation": {"provider": "zai", "model": "glm-5.2",
+                       "period": "monthly",
+                       "budget_usd": float(os.environ.get("LOKI_GLM_BUDGET_USD", "5.0")),
+                       "api_metered": True,
+                       "litellm_models": ("glm-5.2", "openai/glm-5.2", "zai/glm-5.2")},
+    # Agent-workflow lane (2026-07-26) — kimi-k3, 1M ctx, always-reasons.
+    # OUTSIDE the Quota Cascade: never a routing input. peer_b stays on
+    # kimi-k2.6 and nothing in litellm's model_group_alias points here; this
+    # row exists so k3 spend METERS. Pairs with the per-token costs declared
+    # in ~/litellm/config.yaml — litellm 1.83.14 has no moonshot/kimi-k3 in
+    # its cost map, and WITHOUT BOTH HALVES the spend column writes $0.00 and
+    # this row meters blind (the glm-5.2 failure, 2026-07-14 → 2026-07-26).
+    "kimi_k3_agent": {"provider": "moonshot", "model": "kimi-k3",
+                      "period": "monthly",
+                      "budget_usd": float(os.environ.get("LOKI_KIMI_K3_BUDGET_USD", "10.0")),
+                      "api_metered": True,
+                      "litellm_models": ("kimi-k3", "moonshot/kimi-k3")},
 }
 
 # Roles that materialize as CloudQuota rows in state.json (single source for

@@ -53,9 +53,36 @@
 }
 .rail-overall { font-size: 12px; letter-spacing: 0.04em; color: var(--st, var(--muted)); }
 
-.rail-nav { flex: 1; min-height: 0; }
+/* The domain index is the ONLY part of the rail allowed to give ground: brand,
+   Views and the connection read-out keep their natural height at every window
+   size. Before M51 `.rail-nav` was `flex: 1; min-height: 0` with no overflow —
+   the BOX shrank, the nine rows did not, and at 1280×800 the last four painted
+   75px over the Views nav (235px at 1366×640) while the rail itself, whose
+   children had absorbed the shrink, never scrolled. min-height: 0 is what lets
+   the box shrink and is kept deliberately; overflow-y is what the shrinking
+   needs so clipped rows are scrollable instead of spilling over the neighbours.
+   The 3px inline padding (cancelled by the negative margin) keeps the 2px focus
+   ring + 1px offset inside the scroll box, so tabbing cannot summon a sideways
+   scrollbar. */
+.rail-brand, .rail-explore, .rail-foot { flex: none; }
+.rail-nav {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  padding-inline: 3px; margin-inline: -3px;
+  scrollbar-width: thin; scrollbar-color: var(--neuro-border) transparent;
+}
+.rail-nav::-webkit-scrollbar { width: 7px; }
+.rail-nav::-webkit-scrollbar-thumb { background: var(--neuro-border); border-radius: 4px; }
 .rail-nav-head { margin-bottom: var(--s3); }
-.rail-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Both rail lists, together. `.rail-explore` had no desktop rule at all until
+   M51 — its <ul> rendered as a bulleted, 40px-indented document list beside the
+   Domains index it was written to match. */
+.rail-nav ul,
+.rail-explore ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Pulls "Views" up under the Domains list — its own head supplies the spacing.
+   Lived in components/deep/deepdive.css (a stylesheet about the deep-dive view)
+   until M51 brought the rail's rules home to the rail. */
+.rail-explore { margin-top: calc(-1 * var(--s3)); }
 .rail-link {
   display: flex; align-items: center; gap: var(--s2);
   width: 100%; padding: 7px var(--s2); border-radius: var(--r-sm);
@@ -71,6 +98,13 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--st, var(--unknown)) 16%, transparent);
 }
 .rail-link.st-crit .rail-link-dot { animation: ic-pulse 1.3s ease-in-out infinite; }
+/* Views links carry no status, so their dot is the accent rather than a health
+   colour. This rule and `.rail-link-dot` have equal specificity, so it only wins
+   by coming AFTER it — which it never did while it lived in deepdive.css:
+   App.jsx pulls that file into the graph before main.jsx imports shell.css, so
+   the cyan dot was painted `--unknown` grey from the day it was written (M51,
+   measured rgb(90,102,120) against the served bundle). */
+.rail-link-dot-cyan { background: var(--glow-primary); box-shadow: 0 0 6px var(--brass-glow); }
 .rail-link-label { flex: 1; min-width: 0; }
 .rail-link-sum { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 86px; }
 
@@ -186,12 +220,18 @@
   border: 1px solid var(--hairline);
   opacity: 0; transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.bento-cell:hover .bento-expand, .bento-cell.expanded .bento-expand,
+.bento-cell:hover .bento-expand,
 .bento-expand:focus-visible { opacity: 1; }
 .bento-expand:hover { color: var(--glow-primary); border-color: var(--brass-glow); }
-.bento-cell.expanded { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--s3); }
-.bento-cell.expanded > .ic-card, .bento-cell.expanded > section { height: auto; }
-.bento-cell.expanded .ic-card { box-shadow: 0 10px 36px rgba(0,0,0,0.42), 0 0 0 1px var(--brass-glow) inset; }
+/* M139: the `.bento-cell.expanded` rules that stood here are gone. The bento's
+   in-place expand was replaced by full-page deep-dive navigation — .bento-expand
+   calls navigate('/deep/<key>') — and nothing has set that class since. Four
+   dead rules, and the one that mattered was `height: auto` on the card: it is
+   the rule that would stop an expanded card clipping, so the stylesheet read as
+   though the overflow case were handled, in a state that can never occur (M52's
+   defect one layer down). Guarded by src/bento.deadstate.test.jsx; if in-place
+   expansion ever returns, the styling comes back WITH the code that sets the
+   class, not before it. */
 
 /* ── Domain detail (expanded drill-down) ────────────────────────────────── */
 .domain-detail {
@@ -249,16 +289,73 @@
 .bento-cell .ic-card { transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
 .bento-cell:hover .ic-card { transform: translateY(-2px); border-color: var(--hairline-strong); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(232, 232, 248, 0.05); }
 
-/* Hero pairing: Vitals leads wide + tall, Engine Room beside it. */
+/* Weight by what a card actually carries (IA design §10 step 3).
+ *
+ * Every card used to be `span 2`. A uniform grid asserts that Engine Room and
+ * Workflows are equally important and equally deep, which is false in both
+ * directions — and with no hierarchy the eye gets no entry point and no
+ * permission to skip, so every visit costs a full nine-card read.
+ *
+ * The weights are derived from §4's per-card inventory, not from taste:
+ *
+ *   heroes    Vitals (VRAM dial + per-tier split + RAM + CPU) and Engine Room
+ *             (6 tier tiles, ~8 fields each — the densest card on the page).
+ *             Wide AND tall; they are the two signature instruments.
+ *   half      Memory (L1–L7 ladder + queues), Schedule (cells + 60-min
+ *             timeline), Events (tally + 12 rows), Spend (per-provider meters),
+ *             Authority (3 cells + tenure).
+ *   quarter   Routing and Workflows — the two cards §5 MEASURED as thin. Both
+ *             render every field their producer supplies; the missing data is
+ *             upstream in Loki, not here. Narrow is the honest width for a
+ *             complete card with little to say, and it states the producer gap
+ *             in the layout itself rather than padding them to look equal.
+ *
+ * Authority is now QUARTER: §10 step 5 moved its action ladder to its
+ * deep-dive, leaving three cells and a tenure sentence — a complete reading
+ * that does not grow. It was held at half only while the record was still on
+ * it.
+ *
+ * Schedule takes THREE. Freeing a column had to put it somewhere (nine cards
+ * must still sum to a multiple of four or a row ends in a hole), and Schedule
+ * is the half-card that gains most from width: §4 gives it a next-60-minutes
+ * timeline, and a timeline is the one instrument here whose legibility scales
+ * with horizontal room.
+ *
+ * Missions takes a FULL row. It is the only card carrying five counts, and
+ * wrapping them breaks the single-glance reading it exists to give — but the
+ * width is earned by the content, not by the topic's importance. It sits
+ * directly under the two instruments because the audit's finding was that the
+ * console could see the substrate and not the work; the layout now answers
+ * that in the order the eye travels.
+ *
+ * The spans tile the 4-column grid exactly, so no row ends in a hole:
+ *   vitals(2) tiers(2) | missions(4) | schedule(3) authority(1)
+ *   | memory(2) events(2) | spend(2) routing(1) workflows(1)
+ * RichGrid's ORDER is kept in step with this — the two must agree or the
+ * tiling silently regrows the holes it was written to remove.
+ *
+ * `.bento-cell`'s `span 2` above stays as the fallback for a card not listed
+ * here, so a newly added card is half-width rather than unsized. The
+ * uniformity is what is retired, not the default. */
 .bento-vitals { grid-column: span 2; grid-row: span 2; }
-.bento-tiers  { grid-column: span 2; }
-.bento-workflows, .bento-spend, .bento-memory, .bento-events,
-.bento-schedule, .bento-routing, .bento-authority, .bento-docs { grid-column: span 2; }
+.bento-tiers  { grid-column: span 2; grid-row: span 2; }
+.bento-missions { grid-column: span 4; }
+.bento-schedule { grid-column: span 3; }
+.bento-memory, .bento-events, .bento-spend, .bento-docs { grid-column: span 2; }
+.bento-authority, .bento-routing, .bento-workflows { grid-column: span 1; }
 
 @media (max-width: 1500px) {
   .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bento-cell, .bento-vitals, .bento-tiers { grid-column: span 1; }
-  .bento-vitals { grid-row: span 1; }
+  /* Two columns cannot express three weights. Everything becomes half-width
+     and the heroes give up their extra row, rather than a quarter-width card
+     collapsing to an unreadable sliver. */
+  .bento-cell, .bento-vitals, .bento-tiers, .bento-schedule,
+  .bento-authority, .bento-routing, .bento-workflows { grid-column: span 1; }
+  /* Missions keeps the full row at two columns too: five counts across one
+     half-width column would wrap, which is the one thing its layout must not
+     do. */
+  .bento-missions { grid-column: span 2; }
+  .bento-vitals, .bento-tiers { grid-row: span 1; }
 }
 
 /* ── Item 11 polish: cohesive electric/classy surfaces ──────────────────── */

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { isReachabilityAlerting, notifyLocal } from "../runtime/reachability.js";
+import { isReachabilityAlerting, isOutageState, notifyLocal } from "../runtime/reachability.js";
 
 // How long monarch must be fully unreachable before we raise the alarm.
 // Overridable (minutes) via localStorage "cc:reach-threshold-min".
@@ -31,6 +31,14 @@ export function useReachabilityAlert(conn) {
     if (conn === "live" || conn === "polling") {
       // Reachable again — reset everything and drop any active alarm.
       everConnected.current = true;
+      offlineSince.current = null;
+      notified.current = false;
+      setAlerting(false);
+      setOfflineForMs(0);
+    } else if (!isOutageState(conn)) {
+      // Reached monarch but not authorized (401 under the armed read-gate).
+      // Not an outage: clear any running clock so an unpaired client never
+      // raises "can't reach monarch" about a box that is answering.
       offlineSince.current = null;
       notified.current = false;
       setAlerting(false);

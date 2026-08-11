@@ -12,12 +12,14 @@ web/node_modules/
 web/dist/
 web/dist-tauri/
 web/.vite/
+/.vite/
 *.local
 
 # Tauri desktop app
 desktop/node_modules/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+desktop/src-tauri/capabilities/remote.gen.json
 desktop/smoke.log
 desktop/.env
 
@@ -28,3 +30,5 @@ server/runtime/
 
 # OS
 .DS_Store
+.superpowers/
+.build-sha

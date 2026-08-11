@@ -34,6 +34,24 @@ export function isReachabilityAlerting({ everConnected, offlineSince, now, thres
 }
 
 /**
+ * Is this connection state an actual OUTAGE (monarch unreachable), as opposed to
+ * merely not-serving-us?
+ *
+ * "unauthorized" is deliberately NOT an outage. When the read-gate
+ * (CC_REQUIRE_TOKEN_FOR_READS) is armed and the client has no token, every read
+ * returns 401 — monarch answered, so it is demonstrably up. Counting that as an
+ * outage made an unpaired client display "the box may be down (power loss or
+ * network)" and push a false unreachable notification about a healthy box.
+ * The fix for that is pairing, not a power cycle, and the UI must say so.
+ *
+ * @param {string} conn  "live" | "polling" | "unauthorized" | "offline"
+ * @returns {boolean}
+ */
+export function isOutageState(conn) {
+  return conn !== "live" && conn !== "polling" && conn !== "unauthorized";
+}
+
+/**
  * Fire a local OS notification from the open PWA. iOS Safari PWAs do NOT support
  * the `new Notification()` constructor — notifications must go through the
  * service-worker registration — so prefer that and fall back to the constructor

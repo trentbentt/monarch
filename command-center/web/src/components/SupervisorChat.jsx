@@ -63,6 +63,7 @@ export default function SupervisorChat({
     try {
       const body = { question: q, deep: wasDeep };
       if (scope?.domain) body.scope = { domain: scope.domain };
+      else if (scope?.node) body.scope = { node: scope.node };
       const r = await apiFetch("/api/supervisor/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

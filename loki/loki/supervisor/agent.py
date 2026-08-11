@@ -62,7 +62,67 @@ _DEFAULT_MAX_STEPS = int(os.environ.get("LOKI_SUPERVISOR_MAX_STEPS", "3"))
 # model-supplied k and the formatted result size are clamped so one RETRIEVE can't
 # pull a huge result set into T1's single-slot context (prefill blowup / length cut).
 _MAX_TOOL_K = retrieval._DEFAULT_K
+# Ceiling on one tool result. The EFFECTIVE budget is derived per-investigation
+# (see _derive_budget) — this is the cap it may never exceed, not the value.
 _TOOL_RESULT_BUDGET = int(os.environ.get("LOKI_SUPERVISOR_RETRIEVAL_BUDGET", "8000"))
+
+# ---------------------------------------------------------------------------
+# Context budget, derived from the tier's DECLARED window (agentbench #7).
+#
+# The per-RETRIEVE clamp above bounds ONE result; nothing bounded the aggregate.
+# Measured 2026-07-16: the grounded base was 12,726 tok = 52% of T1's 24,576-tok
+# window, and base + 3x8,000 = 76% — it fit, but by arithmetic luck: no code
+# related the budget to the window, and MAX_STEPS is an env var, so raising it to
+# 6 (2x the shipped default) silently overflowed. An overflow truncates the
+# GROUNDED block, so the model answers ungrounded precisely when the session is
+# long — the exact "prefill blowup / length cut" this budget exists to prevent.
+#
+# So: read the window the schema already declares, subtract room for the answer,
+# subtract the measured base, and divide by the steps actually taken.
+# ---------------------------------------------------------------------------
+_CHARS_PER_TOKEN = 4          # generous; JSON tokenizes worse, so this UNDER-
+                              # states pressure and errs toward a smaller budget.
+_RESPONSE_RESERVE_TOK = 2048  # ctx-size covers prompt AND generation — the answer
+                              # needs room or the reply itself is what gets cut.
+_MIN_TOOL_RESULT_BUDGET = 1500   # below this a retrieval returns nothing usable;
+                                 # better to take fewer steps than blind ones.
+
+
+def _window_chars() -> int:
+    """T1's declared context window, in chars. MONARCH_TIERS["t1"].context_size
+    is the same value the live server is launched with (--ctx-size 24576)."""
+    from ..schema import MONARCH_TIERS
+    return MONARCH_TIERS["t1"].context_size * _CHARS_PER_TOKEN
+
+
+def _available_chars(base_chars: int) -> int:
+    """Room left for retrieved evidence after the grounded base and the answer."""
+    reserve = _RESPONSE_RESERVE_TOK * _CHARS_PER_TOKEN
+    return max(0, _window_chars() - reserve - base_chars)
+
+
+def _derive_budget(base_chars: int, max_steps: int) -> int:
+    """Per-result budget that keeps base + steps x budget inside the window."""
+    per = _available_chars(base_chars) // max(1, max_steps)
+    return max(_MIN_TOOL_RESULT_BUDGET, min(_TOOL_RESULT_BUDGET, per))
+
+
+def _clamp_max_steps(base_chars: int, requested: int) -> int:
+    """Clamp LOKI_SUPERVISOR_MAX_STEPS to what the window can actually hold.
+
+    The env var was unguarded: a one-line change could silently truncate the
+    grounded block. Now the window wins — we take fewer steps rather than
+    overflow, and say so.
+    """
+    fits = max(1, _available_chars(base_chars) // _MIN_TOOL_RESULT_BUDGET)
+    allowed = max(1, min(requested, fits))
+    if allowed < requested:
+        logger.warning(
+            "[supervisor] max_steps %d exceeds what T1's %d-token window holds "
+            "with a %d-char grounded base — clamping to %d (raise the window or "
+            "shrink the base to go deeper)",
+            requested, _window_chars() // _CHARS_PER_TOKEN, base_chars, allowed)
+    return allowed
 
 AGENT_PROTOCOL_PROMPT = """\
 ## Deep-dive protocol (you may retrieve before answering)
@@ -151,10 +211,15 @@ def _clamp_k(k) -> int:
     return max(1, min(k, _MAX_TOOL_K))
 
 
-def _run_tool(tool: str, args: dict) -> str:
+def _run_tool(tool: str, args: dict, budget: Optional[int] = None) -> str:
     """Execute one read tool. Returns formatted results or a degradation marker —
     never raises. Resolves the function against `retrieval` at call time; the caller
-    (investigate) has already validated `tool` is in _TOOLS."""
+    (investigate) has already validated `tool` is in _TOOLS.
+
+    `budget` is the per-result char cap; None falls back to the static ceiling so
+    a direct caller still gets bounded output. investigate() passes the derived
+    budget (see _derive_budget)."""
+    budget = _TOOL_RESULT_BUDGET if budget is None else budget
     fn = getattr(retrieval, tool, None)
     if fn is None:
         return f"[{tool}: not available]"
@@ -169,8 +234,8 @@ def _run_tool(tool: str, args: dict) -> str:
     if not snips:
         return f"[{tool}: no results]"
     out = retrieval.format_snippets(snips)               # one shared formatter
-    if len(out) > _TOOL_RESULT_BUDGET:
-        out = out[:_TOOL_RESULT_BUDGET] + "\n…[tool result truncated to fit budget]"
+    if len(out) > budget:
+        out = out[:budget] + "\n…[tool result truncated to fit budget]"
     return out
 
 
@@ -192,6 +257,11 @@ class SupervisorAgent:
         # grounded as the plain `ask` path — never LESS. The model can retrieve more
         # on top; the small overlap is the price of never shipping an ungrounded turn.
         base = self.base_context_fn(question=question, retrieve=True)
+        # Budget from the DECLARED window and the base we actually built, not a
+        # magic constant: take fewer, fuller steps rather than overflow T1 and
+        # have the grounded block silently truncated out from under the answer.
+        steps = _clamp_max_steps(len(base), self.max_steps)
+        budget = _derive_budget(len(base), steps)
         messages: List[dict] = [
             {"role": "system", "content": self.client.system_prompt},
             {"role": "system", "content": AGENT_PROTOCOL_PROMPT},
@@ -200,12 +270,47 @@ class SupervisorAgent:
         ]
         seen: set = set()           # anti-thrashing: signatures already retrieved
         gathered: List[str] = []    # tool results, for the no-converge fallback
+        nudged_ungrounded = False   # M107: the one free pass a directive-less reply gets
 
-        for _step in range(self.max_steps):
+        for _step in range(steps):
             out = self.client.chat(messages)             # guarded model call (degrades offline)
             directive = parse_directive(out)
             if directive is None:
-                return out                                # plain answer → done
+                # M107 · NOT automatically the answer. `parse_directive is None`
+                # used to be the whole terminal condition, so ANY prose ended the
+                # investigation and went straight to the operator — including a
+                # reply that merely ANNOUNCED a retrieval it never issued ("Let me
+                # start by checking the exec journal"). Observed live on the
+                # autonomous path, where it was written to report.md as the
+                # finished investigation (M104); this is the same seam one module
+                # over, and here the non-answer lands on the operator's screen.
+                #
+                # A directive-less reply is terminal when EVIDENCE stands behind
+                # it — a tool actually ran this loop — or when it has already
+                # survived one nudge. No prose heuristic tries to recognise a
+                # preamble: "does this look like an answer" is precisely the
+                # judgement that cannot be pinned by a test, and a wrong guess
+                # either swallows a real answer or ships a fabricated one. The
+                # loop spends one more turn instead and lets the next reply settle
+                # it mechanically.
+                #
+                # Note `gathered`, not the grounded base. `base` is built with
+                # query-directed retrieval, so treating it as evidence would make
+                # every step-1 reply terminal again — the defect, restored.
+                if gathered:
+                    return out                            # evidence behind it → the answer
+                if nudged_ungrounded:
+                    break                                 # told once, still bare → synthesize
+                nudged_ungrounded = True
+                messages.append({"role": "assistant", "content": out})
+                messages.append({"role": "system", "content":
+                    "[That is not a final answer: you issued no RETRIEVE line and "
+                    "no tool has run this turn, so nothing was actually read. "
+                    "Either emit ONE RETRIEVE line now, or — if the grounded "
+                    "context above already answers it — write your COMPLETE answer "
+                    "in prose. Do not describe what you are about to do. "
+                    f"Operator asked: {question!r}.]"})
+                continue
             tool, args = directive
             messages.append({"role": "assistant", "content": out})
             # Signature computed BEFORE the validity check so a repeated forged tool
@@ -225,7 +330,7 @@ class SupervisorAgent:
                     f"Re-anchor — the operator asked: {question!r}. "
                     f"RETRIEVE a valid tool or ANSWER in prose.]"})
                 continue
-            result = _run_tool(tool, args)
+            result = _run_tool(tool, args, budget)
             gathered.append(result)
             messages.append({"role": "system", "content":
                 f"## tool_result[{tool}] (read fresh this turn — cite by [locator])\n"

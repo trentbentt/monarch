@@ -125,6 +125,9 @@ class DecisionEngine:
             k for k, a in self.gate.pending.items() if a.origin != "rule"
         }
         self.gate.prune_stale_runs(active)
+        # 5.2 drop blocking asks whose TTL elapsed (supervisor one-shots):
+        #     stale evidence is re-sensed, never executed (autonomy spine A).
+        self.gate.expire_stale_blocking()
         # 5.5 default-proceed non-blocking Tier-3 asks whose veto window elapsed
         #     AND whose condition survived prune (still proposed this tick). Done
         #     after prune so a cleared condition / newly-available higher cascade

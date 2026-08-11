@@ -64,12 +64,38 @@ def build_payload(event: dict) -> dict:
     }
 
 
+def should_notify_ask(ask: dict, prefs: dict, now_local: datetime) -> bool:
+    """Blocking asks page the operator (something is waiting on them).
+    Non-blocking asks auto-proceed — their surface is the in-app countdown.
+    Asks are never interrupt-class: the overnight window quiets them (§9.5.3)."""
+    if not (ask or {}).get("blocking", True):
+        return False
+    return not in_overnight_window(prefs, now_local)
+
+
+def build_ask_payload(ask: dict) -> dict:
+    aid = (ask or {}).get("action_id", "action")
+    return {
+        "title": f"Monarch · ask: {aid}",
+        "body": ask.get("rationale") or "approval requested",
+        "severity": "ask",
+        "event_id": f"ask-{aid}-{ask.get('proposed_at')}",
+        "tag": f"ask-{aid}",
+        "timestamp": ask.get("proposed_at"),
+    }
+
+
+def _ask_key(ask: dict) -> tuple:
+    return (ask.get("action_id"), str(ask.get("proposed_at")))
+
+
 class PushBridge:
     """Subscribes to the state watcher, dispatches push for new qualifying events."""
 
     def __init__(self, watcher):
         self._watcher = watcher
         self._seen: set = set()
+        self._seen_asks: set = set()
         self._task: Optional[asyncio.Task] = None
         self._primed = False
 
@@ -95,18 +121,28 @@ class PushBridge:
 
     def _handle(self, state: dict) -> None:
         events = ((state.get("events") or {}).get("log")) or []
+        asks = ((state.get("decisions") or {}).get("pending_asks")) or []
         prefs = (state.get("operator") or {}).get("preferences") or {}
         now = datetime.now()
-        new = [e for e in events if e.get("event_id") not in self._seen]
+        new_events = [e for e in events if e.get("event_id") not in self._seen]
+        new_asks = [a for a in asks if _ask_key(a) not in self._seen_asks]
         for e in events:
             self._seen.add(e.get("event_id"))
+        for a in asks:
+            self._seen_asks.add(_ask_key(a))
         if not self._primed:
-            # First snapshot: record seen events but don't replay history as push.
+            # First snapshot: record history, push nothing (no restart replay).
             self._primed = True
             return
-        for e in new:
+        for e in new_events:
             if should_notify(e, prefs, now):
                 try:
                     sender.send_all(build_payload(e))
                 except Exception:
                     pass  # never let a delivery error kill the bridge
+        for a in new_asks:
+            if should_notify_ask(a, prefs, now):
+                try:
+                    sender.send_all(build_ask_payload(a))
+                except Exception:
+                    pass

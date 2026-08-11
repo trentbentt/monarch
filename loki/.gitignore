@@ -57,3 +57,9 @@ loki/voice/models/*.onnx.data
 # Operator working docs (plans/specs) and internal infra notes — private umbrella only.
 docs/superpowers/
 PHASE_B_litellm_path_a.md
+*.bak*
+# Live status written by the 04:30 heartbeat timer (agentbench/heartbeat.py).
+# Unlike its siblings in that dir — one-off benchmark evidence, deliberately
+# committed — this one is rewritten every night, so tracking it would leave the
+# tree permanently dirty.
+agentbench/reports/heartbeat_status.json

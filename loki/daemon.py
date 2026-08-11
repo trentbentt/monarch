@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from loki.listeners import (
     CronListener,
+    EscalationSentinel,
     HardwareListener,
     MemoryListener,
     ProcessListener,
@@ -63,6 +64,7 @@ def main() -> None:
         CronListener(),
         MemoryListener(),
         HardwareListener(),
+        EscalationSentinel(),
     ]
     for listener in listeners:
         listener.start()

@@ -5,7 +5,11 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
-useGLTF.preload("/models/head_woman_basemesh.glb");
+// (useDraco, useMeshopt) both false — see CorticalBrain.tsx for the full
+// reasoning (M157). This mesh also declares extensionsUsed/Required: [], so the
+// wasm decoder drei would otherwise instantiate has nothing to decode. The
+// useGLTF call below must carry the same flags.
+useGLTF.preload("/models/head_woman_basemesh.glb", false, false);
 
 // Wire head encases the brain (brain TARGET_RADIUS = 1.8), slightly larger.
 const TARGET_HEAD_RADIUS = 3.001;
@@ -35,7 +39,7 @@ interface WireframeHeadProps {
 }
 
 export function WireframeHead({ stageRef }: WireframeHeadProps) {
-  const { scene } = useGLTF("/models/head_woman_basemesh.glb");
+  const { scene } = useGLTF("/models/head_woman_basemesh.glb", false, false);
   const outerRef = useRef<THREE.Mesh>(null);
   const innerRef = useRef<THREE.Mesh>(null);
 

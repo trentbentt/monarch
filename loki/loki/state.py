@@ -78,6 +78,10 @@ class StateStore:
         self._events_lock = threading.Lock()
         self._events: Deque[Event] = deque(maxlen=_EVENT_BUFFER_MAX)
 
+        # L1 write-through mirror (lazy redis client; see _mirror_to_l1)
+        self._l1 = None
+        self._l1_warned = False
+
     @classmethod
     def get(cls) -> "StateStore":
         if cls._instance is None:
@@ -158,6 +162,48 @@ class StateStore:
         tmp = STATE_PATH.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, default=str))
         tmp.replace(STATE_PATH)
+
+        self._mirror_to_l1(payload)
+
+    # ── L1 write-through (system-review-2026-07-02 F5) ──────────────────────
+    _L1_URL = os.environ.get("LOKI_L1_URL", "redis://127.0.0.1:6379/0")
+    _L1_TTL_SEC = 60
+
+    def _mirror_to_l1(self, payload: dict) -> None:
+        """Mirror the snapshot into L1 Redis as ``l1:state:<domain>`` JSON.
+
+        Gives the "L1 hot operational truth" layer its intended producer —
+        it held 3 self-describing meta keys and no writer since birth, while
+        being snapshotted, linted, and health-checked nightly. Fail-open:
+        L1 being down must never affect the state.json write path (warn
+        once, retry silently each tick). Keys carry a short TTL so a dead
+        daemon leaves an empty store, not a stale one masquerading as hot
+        truth. Disable with LOKI_L1_MIRROR=0.
+        """
+        if os.environ.get("LOKI_L1_MIRROR", "1") != "1":
+            return
+        try:
+            if self._l1 is None:
+                import redis
+                self._l1 = redis.Redis.from_url(
+                    self._L1_URL,
+                    socket_connect_timeout=0.5,
+                    socket_timeout=0.5,
+                )
+            pipe = self._l1.pipeline(transaction=False)
+            for domain, value in payload.items():
+                pipe.set(f"l1:state:{domain}",
+                         json.dumps(value, default=str),
+                         ex=self._L1_TTL_SEC)
+            pipe.execute()
+            if self._l1_warned:
+                logger.info("[state] L1 mirror recovered")
+                self._l1_warned = False
+        except Exception as e:
+            self._l1 = None
+            if not self._l1_warned:
+                logger.warning(f"[state] L1 mirror unavailable (fail-open): {e}")
+                self._l1_warned = True
 
     @classmethod
     def load_from_disk(cls) -> Optional[SystemModel]:

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import secrets
 
-from fastapi import Header, HTTPException, Query
+from fastapi import Header, HTTPException, Query, Request
 
 import config
 
@@ -75,28 +75,61 @@ def _valid(authorization: str | None, x_cc_token: str | None) -> bool:
     return _same(supplied, get_token())
 
 
-def _deny(kind: str) -> None:
-    """Reject with 401 and leave a trace — token probing must not be silent."""
+_REQUEST_DEFAULT_NOTE = """Why the three gates below declare `request: Request = None`.
+
+The annotation is what makes FastAPI inject the live Request; the `= None`
+default is for the tests that call these gates DIRECTLY rather than through the
+app, and they do so for good reason — a non-ASCII header byte and the SSE
+`?token=` branch are paths TestClient cannot produce (test_security.py). A bare
+`request: Request` breaks those three security tests; dropping the parameter
+gives M171's record nothing to report.
+
+If FastAPI ever stopped injecting, `request` would be None, `params` would fall
+back to `{}`, and M171's fix would silently revert to the defect. That is not
+left to trust: test_a_denial_records_what_was_attempted asserts method and path
+through the real app path, so the fallback cannot pass unnoticed.
+"""
+
+
+def _deny(kind: str, request: "Request | None" = None) -> None:
+    """Reject with 401 and leave a trace — token probing must not be silent.
+
+    M171: the trace must identify something. It recorded `params={}` and
+    `actor="operator"`, so a probe was indistinguishable from the operator's
+    own unpaired client, which is exactly why the 2026-08-04 control_auth
+    burst could not be attributed by the session investigating it — the method
+    and path had to be recovered from the uvicorn access log instead.
+
+    What is recorded is the method and path ATTEMPTED. Never the supplied
+    token: a rejected token is still a secret (it may be the operator's own,
+    mistyped) and an audit log is not the place to learn it.
+    """
     logger.warning("%s: denied (invalid or missing control token)", kind)
     try:
         from control import audit
-        audit.record(kind, {}, "denied", "invalid or missing control token")
+        params = {}
+        if request is not None:
+            params = {"method": request.method, "path": request.url.path}
+        audit.record(kind, params, "denied", "invalid or missing control token",
+                     actor="unauthenticated")
     except Exception:   # audit must never convert a 401 into a 500
         pass
     raise HTTPException(status_code=401, detail="invalid or missing control token")
 
 
 async def require_control_token(
+    request: Request = None,          # see _REQUEST_DEFAULT_NOTE
     authorization: str | None = Header(default=None),
     x_cc_token: str | None = Header(default=None),
 ) -> None:
     """FastAPI dependency: 401 unless a valid control token is presented.
     Always enforced (mutations)."""
     if not _valid(authorization, x_cc_token):
-        _deny("control_auth")
+        _deny("control_auth", request)
 
 
 async def require_read_token(
+    request: Request = None,
     authorization: str | None = Header(default=None),
     x_cc_token: str | None = Header(default=None),
 ) -> None:
@@ -106,10 +139,11 @@ async def require_read_token(
     if not config.REQUIRE_TOKEN_FOR_READS:
         return
     if not _valid(authorization, x_cc_token):
-        _deny("read_auth")
+        _deny("read_auth", request)
 
 
 async def require_read_token_sse(
+    request: Request = None,
     token: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
     x_cc_token: str | None = Header(default=None),
@@ -126,4 +160,4 @@ async def require_read_token_sse(
         return
     if token and _same(token, get_token()):
         return
-    _deny("read_auth")
+    _deny("read_auth", request)

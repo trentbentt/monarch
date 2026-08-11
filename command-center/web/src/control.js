@@ -54,6 +54,25 @@ export function setToken(t, { sessionOnly = isSessionOnly() } = {}) {
   }
 }
 
+/**
+ * Change where the CURRENT token is stored, without re-pairing.
+ *
+ * The mode used to be settable only on the pairing form — which hides once you
+ * are paired — and `clearToken` deliberately drops the preference, so a re-pair
+ * silently reverts to the hardened session-only default. That gave one shot at
+ * the decision on a form you cannot get back to, and getting it wrong on a phone
+ * means re-pasting a 43-character token every launch. This makes it a setting.
+ *
+ * No-op when nothing is paired: never write an empty credential.
+ *
+ * @param {boolean} sessionOnly  true = wipe on close, false = persist
+ */
+export function setPersistence(sessionOnly) {
+  const t = getToken();
+  if (!t) return;
+  setToken(t, { sessionOnly });
+}
+
 export function clearToken() {
   _ss()?.removeItem(TOKEN_KEY);
   _ls()?.removeItem(TOKEN_KEY);

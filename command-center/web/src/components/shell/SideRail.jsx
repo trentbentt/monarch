@@ -1,5 +1,6 @@
 import ReactorOrb from "./ReactorOrb.jsx";
 import { navigate } from "../../hooks/useHashRoute.js";
+import { usePhone } from "../../hooks/usePhone.js";
 
 /**
  * The console spine. Top: the reactor orb (overall status, the signature).
@@ -29,6 +30,7 @@ function jump(key) {
 }
 
 export default function SideRail({ overview, conn }) {
+  const phone = usePhone();
   const overall = overview?.overall || "unknown";
   const byKey = Object.fromEntries((overview?.domains || []).map((d) => [d.key, d]));
   const crit = (overview?.attention || []).filter((a) => a.status === "crit").length;
@@ -68,9 +70,25 @@ export default function SideRail({ overview, conn }) {
         </ul>
       </nav>
 
-      <nav className="rail-explore" aria-label="Explore">
-        <div className="eyebrow rail-nav-head">Explore</div>
+      <nav className="rail-explore" aria-label="Views">
+        <div className="eyebrow rail-nav-head">Views</div>
         <ul>
+          <li>
+            <button className="rail-link" onClick={() => navigate("/anatomy")}>
+              <span className="rail-link-dot rail-link-dot-cyan" aria-hidden="true" />
+              <span className="rail-link-label">🗺 Atlas</span>
+              <span className="rail-link-sum t-mono">anatomy</span>
+            </button>
+          </li>
+          {!phone && (
+            <li>
+              <button className="rail-link" onClick={() => navigate("/world")}>
+                <span className="rail-link-dot rail-link-dot-cyan" aria-hidden="true" />
+                <span className="rail-link-label">◉ World</span>
+                <span className="rail-link-sum t-mono">3D</span>
+              </button>
+            </li>
+          )}
           <li>
             <button className="rail-link" onClick={() => navigate("/deep/codebase")}>
               <span className="rail-link-dot rail-link-dot-cyan" aria-hidden="true" />

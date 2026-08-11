@@ -398,6 +398,7 @@ Commands:
   evercore      EverCore (L7) substrate detail — ES/Milvus/Mongo/Redis/API + rerank
   profile-drift EverCore profile drift digest vs vault operator.md (§15 Item 13)
   doctrine-lint Nightly doctrine ⟷ disk lint result (master summary §15.5)
+  escalation    Rung-2 brief queue (§9.5.6) — list | run (propose-only runner)
 """
 
 
@@ -775,6 +776,40 @@ def cmd_doctrine_lint() -> None:
         print(dim("  doctrine matches disk."))
 
 
+def cmd_escalation(args) -> None:
+    """Escalation brief queue (spine Phase C, §9.5.6): list | run.
+
+    `run` executes the propose-only rung-2 runner once (glm-5.2 lane).
+    Exit 3 when the runner skipped (no briefs / quota) and exit 5 when it ran
+    but produced no usable report, so cron logs are greppable without parsing
+    JSON. Those two are deliberately distinct: a skip is nothing to do, while
+    a no-report run spent a model call and left a brief unresolved (M104).
+    Reporting the second as success is how eleven silent nights happened."""
+    from loki.escalation import briefs
+    sub = args[1].lower() if len(args) > 1 else "list"
+    if sub == "list":
+        rows = briefs.list_briefs()
+        if not rows:
+            print(dim("No escalation briefs."))
+            return
+        for r in rows:
+            flag = " ⚑frontier" if r.get("needs_frontier") else ""
+            print(f"{r['id']}  [{r.get('status', '?')}]{flag}  {r.get('kind', '')}"
+                  f"  ({r.get('producer', '?')})")
+        return
+    if sub == "run":
+        from loki.escalation import runner
+        out = runner.run_once()
+        print(json.dumps(out))
+        if out.get("skipped"):
+            sys.exit(3)
+        if out.get("no_report"):
+            sys.exit(5)
+        return
+    print(red(f"Unknown escalation subcommand: {sub} (list | run)"))
+    sys.exit(2)
+
+
 def main() -> None:
     args = sys.argv[1:]
     if not args:
@@ -795,6 +830,9 @@ def main() -> None:
         return
     if cmd == "doctrine-lint":
         cmd_doctrine_lint()
+        return
+    if cmd == "escalation":
+        cmd_escalation(args)
         return
     # authority reads/writes authority.json directly — no state.json needed.
     if cmd == "authority":

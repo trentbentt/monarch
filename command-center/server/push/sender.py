@@ -41,6 +41,32 @@ def send_one(subscription: dict, payload: dict) -> Tuple[bool, int]:
         return False, 0
 
 
+def probe(subscription: dict) -> int:
+    """Ask the push service whether this subscription still exists, without
+    delivering anything a device should show: no payload, ttl=0, so an
+    undeliverable message is dropped by the service instead of queueing (the
+    service worker additionally swallows payloadless pushes). Returns the HTTP
+    status, 0 when the question could not be asked; only 404/410 proves death
+    and the caller treats everything else as alive. Deliberately never mutates
+    the store — the StoreFull path calls this UNDER the store lock, where
+    send_one's prune-on-404 would deadlock on the same non-reentrant lock."""
+    from pywebpush import webpush, WebPushException
+
+    try:
+        webpush(
+            subscription_info=subscription,
+            vapid_private_key=vapid.private_key_b64(),
+            vapid_claims=_claims(),
+            ttl=0,
+            timeout=5,
+        )
+        return 201
+    except WebPushException as e:
+        return getattr(getattr(e, "response", None), "status_code", 0) or 0
+    except Exception:
+        return 0
+
+
 def send_all(payload: dict) -> dict:
     sent, failed, pruned = 0, 0, 0
     for sub in subscriptions.all():

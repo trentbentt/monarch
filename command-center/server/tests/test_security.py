@@ -224,10 +224,15 @@ def test_push_subscriptions_capped(tmp_path, monkeypatch):
     silencing primitive — see test_push_registration_cannot_evict_a_subscriber.
     The bound is still enforced; only the eviction victim changed."""
     import pytest
-    from push import subscriptions
+    from push import subscriptions, sender
     import config as _cfg
     monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
     monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 5)
+    # Every stored endpoint is vouched for: the flood must be refused without
+    # displacing anyone. Unpatched, the M165 probe asks the real network and
+    # fcm.googleapis.com answers 404 for this fabricated path — a unit test
+    # letting the internet decide who gets evicted.
+    monkeypatch.setattr(sender, "probe", lambda sub: 201)
     for i in range(5):
         subscriptions.add({"endpoint": f"https://push.example/{i}"})
     with pytest.raises(subscriptions.StoreFull):
@@ -314,10 +319,15 @@ def test_push_registration_cannot_evict_a_subscriber(tmp_path, monkeypatch):
     oldest (registered at PWA install). So filling the store silently removed
     the operator from the delivery list and alerts went only to the newcomers —
     the bound meant to stop disk growth became a way to go dark."""
-    from push import subscriptions
+    from push import subscriptions, sender
     import config as _cfg
     monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
     monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 5)
+    # Every stored endpoint is vouched for: the flood must be refused without
+    # displacing anyone. Unpatched, the M165 probe asks the real network and
+    # fcm.googleapis.com answers 404 for this fabricated path — a unit test
+    # letting the internet decide who gets evicted.
+    monkeypatch.setattr(sender, "probe", lambda sub: 201)
 
     operator = "https://fcm.googleapis.com/OPERATOR-DEVICE"
     subscriptions.add({"endpoint": operator})
@@ -347,6 +357,68 @@ def test_existing_subscriber_can_always_re_register(tmp_path, monkeypatch):
     stored = {s["endpoint"]: s for s in subscriptions.all()}
     assert stored["https://push.example/1"].get("keys") == {"p256dh": "new"}
     assert len(stored) == 3
+
+
+def test_store_full_of_dead_rotations_admits_the_live_endpoint(tmp_path, monkeypatch):
+    """M165: push services rotate endpoints, and a rotated-away entry is dead
+    at the service while still holding a slot here — nothing proves it dead
+    until a delivery happens to 404. A store full of the operator's OWN stale
+    rotations then 503s the operator's LIVE endpoint and alerts go nowhere:
+    the lockout the refuse-don't-evict cap was never meant to build. On
+    StoreFull the store now asks the push service about stored endpoints and
+    drops only what the service itself disowns (404/410), then admits the
+    newcomer if room opened."""
+    from push import subscriptions, sender
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
+    monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 3)
+    for i in range(3):
+        subscriptions.add({"endpoint": f"https://push.example/rotated/{i}"})
+    monkeypatch.setattr(sender, "probe", lambda sub: 410)
+    total = subscriptions.add({"endpoint": "https://push.example/live"})
+    eps = {s["endpoint"] for s in subscriptions.all()}
+    assert "https://push.example/live" in eps, (
+        "a store full of provably-dead rotations locked out the live endpoint")
+    assert total <= 3 and subscriptions.count() <= 3, "the cap must still bound"
+
+
+def test_store_full_of_live_endpoints_still_refuses(tmp_path, monkeypatch):
+    """The prune must not soften the anti-eviction property: when the push
+    service vouches for every stored endpoint, the newcomer is refused exactly
+    as before and every stored subscriber survives the attempt — pruning the
+    merely-unlucky would rebuild the silencing primitive the refusal replaced."""
+    import pytest
+    from push import subscriptions, sender
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
+    monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 3)
+    for i in range(3):
+        subscriptions.add({"endpoint": f"https://push.example/{i}"})
+    monkeypatch.setattr(sender, "probe", lambda sub: 201)
+    with pytest.raises(subscriptions.StoreFull):
+        subscriptions.add({"endpoint": "https://push.example/new"})
+    eps = {s["endpoint"] for s in subscriptions.all()}
+    assert eps == {f"https://push.example/{i}" for i in range(3)}, (
+        "a live subscriber was dropped to seat a newcomer")
+
+
+def test_probe_failure_is_not_proof_of_death(tmp_path, monkeypatch):
+    """A probe that could not be asked answers nothing (status 0): pruning on
+    silence would fabricate the death verdict in exactly the direction that
+    silences the operator — a downed network at registration time would purge
+    the whole store. Nothing is pruned, and the newcomer is refused loudly."""
+    import pytest
+    from push import subscriptions, sender
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "PUSH_SUBS_PATH", tmp_path / "subs.json")
+    monkeypatch.setattr(_cfg, "PUSH_MAX_SUBS", 3)
+    for i in range(3):
+        subscriptions.add({"endpoint": f"https://push.example/{i}"})
+    monkeypatch.setattr(sender, "probe", lambda sub: 0)
+    with pytest.raises(subscriptions.StoreFull):
+        subscriptions.add({"endpoint": "https://push.example/new"})
+    assert {s["endpoint"] for s in subscriptions.all()} == {
+        f"https://push.example/{i}" for i in range(3)}
 
 
 # --- Auth: a malformed token must deny, not crash ----------------------------
