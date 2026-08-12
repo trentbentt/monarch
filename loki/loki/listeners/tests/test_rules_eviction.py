@@ -28,6 +28,10 @@ def test_evicts_idle_burst_under_pressure():
     assert p.action_id == "evict_idle_burst_tier"
     assert p.params == {"tier": "t2"}
     assert p.dedup_key == "evict_idle_burst_tier:t2"
+    # Autonomy spine A: proposals carry the snapshot values that fired them.
+    assert "oom_risk" in p.evidence
+    assert p.evidence["active_requests"] == 0
+    assert p.evidence["holding_gpu_mb"] == 6800
 
 
 def test_does_not_evict_busy_burst():

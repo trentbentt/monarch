@@ -76,6 +76,7 @@ def test_offload_fires_when_busy_burst_holds_gpu(monkeypatch):
     monkeypatch.setattr(rules, "_in_overnight_window", lambda p, n: True)
     out = rules.vram_pressure_offload_t1(_t1_model(t2_vram=6800, t2_active=2))
     assert len(out) == 1 and out[0].action_id == "offload_t1_reasoning"
+    assert "oom_risk" in out[0].evidence
 
 
 def test_offload_defers_when_idle_burst_holds_gpu(monkeypatch):
@@ -104,6 +105,73 @@ def test_offload_skips_without_pressure(monkeypatch):
     assert rules.vram_pressure_offload_t1(_t1_model(oom=OOMRisk.LOW)) == []
 
 
+def test_offload_skips_a_failed_t1(monkeypatch):
+    """You cannot offload a tier that is not running.
+
+    Without this guard vram_pressure_offload_t1 co-fires with t1_down_restore:
+    oom_risk is a LAGGING reading, so a dead T1 has already released its ~16 GB
+    but vram.py only learns that on its next poll — the stale pressure arms an
+    offload against a corpse, and T1 gets relaunched at full -ngl by the restore
+    then immediately again at reduced -ngl by the offload.
+    """
+    monkeypatch.setattr(rules, "_in_overnight_window", lambda p, n: True)
+    m = _t1_model(oom=OOMRisk.IMMINENT)
+    m.tiers["t1"].runtime.state = TierState.FAILED
+    assert rules.vram_pressure_offload_t1(m) == []
+
+
+# ── t1_down_restore ──────────────────────────────────────────────────────────
+def _t1_down_model(*, state=TierState.FAILED, offloaded=False):
+    m = SystemModel()
+    m.tiers["t1"] = Tier(
+        config=MONARCH_TIERS["t1"],
+        runtime=TierRuntime(state=state, offloaded=offloaded,
+                            health_status=HealthStatus.UNRESPONSIVE
+                            if state == TierState.FAILED else HealthStatus.OK),
+    )
+    return m
+
+
+def test_t1_down_restore_fires_when_t1_failed_at_full_residency():
+    """The gap agentbench #5 found: T1 was the only tier with no autonomous
+    recovery. crashed_cpu_tier covers t3/t4/t5, unresponsive_burst_tier covers
+    t2, and restore_t1_when_window_closes needs runtime.offloaded — so a T1 that
+    died at full residency matched nothing and stayed down."""
+    out = rules.t1_down_restore(_t1_down_model())
+    assert len(out) == 1
+    assert out[0].action_id == "restore_t1_reasoning"
+    assert out[0].trigger == "t1_down"
+    assert out[0].evidence["t1_state"] == "failed"
+    assert out[0].evidence["t1_offloaded"] is False
+
+
+def test_t1_down_restore_defers_when_offloaded():
+    """offloaded + down is a FAILED OFFLOAD — owned by
+    offload_t1_reasoning.rollback() and the window-close rule, not this one.
+    Keeps the two restore paths mutually exclusive by construction."""
+    assert rules.t1_down_restore(_t1_down_model(offloaded=True)) == []
+
+
+def test_t1_down_restore_silent_when_t1_healthy():
+    assert rules.t1_down_restore(_t1_down_model(state=TierState.ACTIVE)) == []
+
+
+def test_t1_down_restore_silent_on_warming_tier():
+    """A STOPPED T1 is warming, not failed — tier_health only escalates
+    ACTIVE→FAILED. Restarting a warming tier would thrash every cold boot."""
+    assert rules.t1_down_restore(_t1_down_model(state=TierState.STOPPED)) == []
+
+
+def test_t1_down_restore_and_offload_never_co_fire(monkeypatch):
+    """The pair that fights (§10.3 / the loadtest restore-vs-offload finding):
+    a downed T1 under STALE vram pressure must yield exactly one proposal."""
+    monkeypatch.setattr(rules, "_in_overnight_window", lambda p, n: True)
+    m = _t1_model(oom=OOMRisk.IMMINENT)
+    m.tiers["t1"].runtime.state = TierState.FAILED
+    fired = [p.action_id for r in rules.RULES for p in r(m)]
+    assert fired == ["restore_t1_reasoning"]
+
+
 # ── crashed_cpu_tier ─────────────────────────────────────────────────────────
 def _cpu_model(tid, *, state, health, restarts=0):
     m = SystemModel()
@@ -122,6 +190,11 @@ def test_crashed_cpu_tier_proposes_restart():
     assert len(out) == 1
     assert out[0].action_id == "auto_restart_cpu_dataplane_tier"
     assert out[0].params == {"tier": tid}
+    # Autonomy spine A: proposals carry the snapshot values that fired them.
+    assert out[0].evidence["tier"] == tid
+    assert out[0].evidence["state"] == "failed"
+    assert out[0].evidence["health_status"] == "unresponsive"
+    assert isinstance(out[0].evidence["restart_count_24h"], int)
 
 
 def test_crashed_cpu_tier_skips_flapping():
@@ -150,6 +223,7 @@ def test_restore_fires_when_offloaded_and_window_closed(monkeypatch):
     monkeypatch.setattr(rules, "_in_overnight_window", lambda p, n: False)
     out = rules.restore_t1_when_window_closes(_restore_model(offloaded=True))
     assert len(out) == 1 and out[0].action_id == "restore_t1_reasoning"
+    assert out[0].evidence["t1_offloaded"] is True
 
 
 def test_restore_skips_inside_window(monkeypatch):
