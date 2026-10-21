@@ -15,7 +15,6 @@ import UpdateCheck from "./components/UpdateCheck.jsx";
 import RichGrid from "./components/RichGrid.jsx";
 import PendingPanel from "./components/PendingPanel.jsx";
 import DigestCard from "./components/DigestCard.jsx";
-import MemoryQueues from "./components/MemoryQueues.jsx";
 import DocsSearch from "./components/DocsSearch.jsx";
 import PushControls from "./components/PushControls.jsx";
 import ControlPanel from "./components/ControlPanel.jsx";
@@ -107,7 +106,6 @@ function Console({ overview, state, routing, pending, conn, confirm, setConfirm,
           <DigestCard openConfirm={setConfirm} />
           <ControlPanel openConfirm={setConfirm} />
           <div className="ops-row">
-            <MemoryQueues />
             <PushControls />
           </div>
           <DocsSearch />

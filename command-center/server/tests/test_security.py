@@ -145,11 +145,11 @@ def test_read_gate_on_requires_token(tmp_path, monkeypatch):
 
 def test_read_gate_covers_all_state_and_content_reads(tmp_path, monkeypatch):
     """Every full-state / content read is now gated, not just /state — closing the
-    holes where /overview, /routing, /pending, /memory/queues and /docs/search
+    holes where /overview, /routing, /pending and /docs/search
     streamed sensitive data with the gate on (review H7)."""
     main = _make_app(tmp_path, monkeypatch, require_reads="1")
     gated = ["/api/overview", "/api/routing", "/api/pending",
-             "/api/memory/queues", "/api/docs/search"]
+             "/api/docs/search"]
     with TestClient(main.app) as c:
         for path in gated:
             assert c.get(path).status_code == 401, f"{path} is not gated"

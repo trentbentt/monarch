@@ -86,11 +86,9 @@ def test_pending_endpoint(client):
     assert "pending" in r.json()
 
 
-def test_memory_queues_endpoint(client):
-    r = client.get("/api/memory/queues")
-    assert r.status_code == 200
-    body = r.json()
-    assert "skill_drafts" in body and "curated_gc" in body
+def test_memory_queues_endpoint_is_gone(client):
+    # Hermes retired 2026-10-07 (M593): the draft-state queues have no endpoint.
+    assert client.get("/api/memory/queues").status_code in (404, 405)
 
 
 def test_docs_search_endpoint(client):

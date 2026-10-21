@@ -20,7 +20,6 @@ from control import audit, registry
 from control.auth import require_control_token, require_read_token, require_read_token_sse
 from derive import derive_overview
 from legibility import derive_routing, enrich_pending
-from reader import stores
 
 router = APIRouter(prefix="/api")
 
@@ -83,11 +82,6 @@ async def routing(request: Request):
 @router.get("/pending", dependencies=[Depends(require_read_token)])
 async def pending(request: Request):
     return {"pending": enrich_pending(_watcher(request).current())}
-
-
-@router.get("/memory/queues", dependencies=[Depends(require_read_token)])
-async def memory_queues(request: Request):
-    return stores.memory_queues()
 
 
 @router.get("/docs/search", dependencies=[Depends(require_read_token)])
