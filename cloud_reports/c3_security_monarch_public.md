@@ -380,4 +380,4 @@ The README says "hosts, addresses, credentials, and the operator's environment a
 6. Third-party 3D and video assets (`head_woman_basemesh.glb`, brain meshes, `brain-intro.mp4`) carry no licence note.
 
 ---
-Report content commit: see the commit that last changed this file on `cloud/m647-w3-13-security-public`; its SHA is recorded in the final chat message.
+Report content commit: `306be4f61d3f` on `cloud/m647-w3-13-security-public`. A follow-up commit only records this line.
