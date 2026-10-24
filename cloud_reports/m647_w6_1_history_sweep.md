@@ -124,4 +124,4 @@ Matches that were judged noise and are not counted as hits:
 - I assumed H2–H4 are not reused as real values in a deployment. They read as test placeholders, but I cannot check the real environment.
 - I judged the high-entropy matches to be identifiers or file names from their masked shape and the surrounding code, not from their full values.
 
-Report content commit: (recorded in the commit that follows this one; see branch `cloud/m647-w6-1-monarch-history-sweep` head)
+Report content commit: `eeb53f31bcdbfdbe5407bedb3d5e03cd58ab8839` (this line itself is added by the commit after it).
